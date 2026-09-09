@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Local process controls and live output for Obama and Waffle.">
+  <title>Obama + Waffle · Control center</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="title"><span class="brand" aria-hidden="true">&gt;_</span><div><p class="eyebrow">OBAMA + WAFFLE</p><h1>Control center</h1></div></div>
+      <div class="connection"><span class="dot" id="connection-dot"></span><span id="connection" role="status">Connecting…</span><span class="local">LOCALHOST</span></div>
+    </header>
+    <div id="error" class="error" role="alert" hidden></div>
+    <section class="bots" aria-label="Bot process controls">
+      <article class="bot obama" id="obama-card">
+        <div class="bot-heading"><div class="bot-name"><span class="monogram" aria-hidden="true">O</span><div><h2>Obama</h2><p>Voice &amp; conversation</p></div></div><span id="obama-state" class="badge" role="status">Checking</span></div>
+        <div class="bot-bottom"><div class="process-meta"><span id="obama-detail">Waiting for launcher</span><span id="obama-uptime">Process status</span></div><div class="actions" aria-label="Obama controls"><button type="button" data-bot="obama" data-action="start" class="start" disabled>Start</button><button type="button" data-bot="obama" data-action="stop" disabled>Stop</button><button type="button" data-bot="obama" data-action="restart" disabled>↻ Restart</button></div></div>
+        <p id="obama-error" class="bot-error" hidden></p>
+      </article>
+      <article class="bot waffle" id="waffle-card">
+        <div class="bot-heading"><div class="bot-name"><span class="monogram" aria-hidden="true">W</span><div><h2>Waffle</h2><p>Music &amp; playback</p></div></div><span id="waffle-state" class="badge" role="status">Checking</span></div>
+        <div class="bot-bottom"><div class="process-meta"><span id="waffle-detail">Waiting for launcher</span><span id="waffle-uptime">Process status</span></div><div class="actions" aria-label="Waffle controls"><button type="button" data-bot="waffle" data-action="start" class="start" disabled>Start</button><button type="button" data-bot="waffle" data-action="stop" disabled>Stop</button><button type="button" data-bot="waffle" data-action="restart" disabled>↻ Restart</button></div></div>
+        <p id="waffle-error" class="bot-error" hidden></p>
+      </article>
+    </section>
+    <div class="workspace">
+      <section class="panel console" aria-labelledby="output-heading">
+        <div class="panel-heading"><h2 id="output-heading">Live output <span id="line-count" class="count">0</span></h2><span class="meta">stdout + stderr</span></div>
+        <div class="console-tools"><div class="filters" aria-label="Filter output"><button type="button" data-filter="all" aria-pressed="true">All bots</button><button type="button" data-filter="obama" aria-pressed="false">Obama</button><button type="button" data-filter="waffle" aria-pressed="false">Waffle</button></div><div class="log-actions"><label><input id="follow" type="checkbox" checked> Follow</label><button id="clear" type="button">Clear view</button></div></div>
+        <div class="log-scroll" id="log-scroll" tabindex="0" aria-label="Scrollable bot output"><div id="empty-logs" class="empty"><span class="terminal-mark" aria-hidden="true">&gt;_</span><h3>Ready when you are.</h3><p>Start a bot to see its output here.</p></div><div id="logs"></div></div>
+        <div class="console-footer"><span id="retention">Recent output stays in memory</span><span id="last-output">Waiting for output</span></div>
+      </section>
+      <section class="panel overview" aria-labelledby="overview-heading">
+        <div class="panel-heading"><h2 id="overview-heading">Obama overview</h2><a id="open-dashboard" href="http://127.0.0.1:3000" target="_blank" rel="noopener noreferrer" hidden>Open ↗</a></div>
+        <div class="frame-address"><span class="dot" id="frame-dot"></span><span id="frame-address">127.0.0.1:3000</span><button type="button" id="reload-frame" disabled aria-label="Reload Obama overview">↻</button></div>
+        <div class="frame-body"><div id="frame-empty" class="empty"><span class="overview-mark" aria-hidden="true">O</span><h3 id="frame-title">Obama is stopped.</h3><p id="frame-note">Start Obama to open its live dashboard here.</p></div><iframe id="obama-frame" title="Obama live connection and server overview" referrerpolicy="no-referrer" hidden></iframe></div>
+      </section>
+    </div>
+    <footer><span>Process status is separate from Discord connection status.</span><span>Ctrl+C in the launcher stops both bots.</span></footer>
+  </main>
+</body>
+</html>

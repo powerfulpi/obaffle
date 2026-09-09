@@ -1,0 +1,54 @@
+export const dashboardHtml = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Live status and server stats for your Obama Discord bot.">
+<title>Obama — Bot overview</title>
+<style>
+:root{color-scheme:dark;--bg:#101411;--panel:#181e19;--line:#303930;--text:#edf2e9;--muted:#a0ad9e;--accent:#c5f58b;--danger:#f2b7a0}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1160px;margin:auto;padding:36px 40px 28px}header{display:flex;align-items:center;justify-content:space-between;padding-bottom:30px;border-bottom:1px solid var(--line)}.brand{display:flex;align-items:center;gap:13px;font-size:21px;font-weight:700;letter-spacing:-.7px}.mark{display:grid;place-items:center;width:40px;height:40px;border:1px solid var(--accent);border-radius:50%;color:var(--accent);font-size:23px}.local{font:12px ui-monospace,monospace;color:var(--muted);letter-spacing:1.2px}.intro{margin:38px 0 26px;display:flex;justify-content:space-between;align-items:end;gap:20px}.eyebrow{font:12px ui-monospace,monospace;letter-spacing:2px;text-transform:uppercase;color:var(--accent)}h1{font-size:clamp(32px,5vw,46px);font-weight:500;letter-spacing:-2px;line-height:1.15;margin:10px 0}p{margin:0;color:var(--muted)}button{font:14px inherit;background:transparent;border:1px solid #53604f;color:var(--text);padding:10px 17px;border-radius:7px;cursor:pointer;white-space:nowrap}button:hover{background:#263022}button:focus-visible{outline:2px solid var(--accent);outline-offset:4px}button:disabled{opacity:.5;cursor:wait}.hero{display:grid;grid-template-columns:1.12fr 1fr;gap:16px}.status-panel{background:var(--accent);color:#203317;border-radius:12px;padding:28px;min-height:248px;display:flex;flex-direction:column;justify-content:space-between}.status-panel.offline{background:var(--danger)}.status-panel.waiting{background:#c8cebf}.panel-top{display:flex;align-items:center;justify-content:space-between;font:13px ui-monospace,monospace;text-transform:uppercase;letter-spacing:1px}.signal{display:flex;align-items:end;gap:4px;height:22px}.signal i{width:5px;background:currentColor;border-radius:2px}.signal i:nth-child(1){height:7px}.signal i:nth-child(2){height:12px}.signal i:nth-child(3){height:17px}.signal i:nth-child(4){height:22px}.status-title{font-size:52px;line-height:1.1;letter-spacing:-2px;margin:24px 0 9px}.status-panel p{color:inherit;font-size:14px}.status-dot{display:inline-block;width:8px;height:8px;background:currentColor;border-radius:50%;margin-right:8px}.stats{display:grid;grid-template-columns:1fr 1fr;gap:16px}.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px 23px}.label{font-size:14px;color:var(--muted)}.value{font-size:36px;letter-spacing:-1.5px;font-variant-numeric:tabular-nums;line-height:1.25;margin:10px 0 3px}.detail{font-size:12px;color:var(--muted)}.servers{margin-top:36px}.section-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}h2{font-size:19px;font-weight:500;margin:0}.count{display:inline-block;font:12px ui-monospace,monospace;border:1px solid var(--line);padding:3px 8px;border-radius:5px;margin-left:10px;color:var(--muted)}.caption{font-size:13px;color:var(--muted)}.table-wrap{border:1px solid var(--line);border-radius:12px;overflow:hidden}table{width:100%;border-collapse:collapse;text-align:left}th{font-weight:400;font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);background:#151a16;padding:14px 23px}td{padding:18px 23px;border-top:1px solid var(--line);font-size:14px}th:last-child,td:last-child{text-align:right}.guild{display:flex;align-items:center;gap:12px;overflow-wrap:anywhere}.avatar{flex-shrink:0;display:grid;place-items:center;width:35px;height:35px;border-radius:9px;background:#293522;color:var(--accent);font-weight:600}.badge{color:var(--accent);font-size:13px;white-space:nowrap}.badge.unavailable{color:var(--danger)}.empty{text-align:center!important;padding:36px;color:var(--muted)}footer{display:flex;justify-content:space-between;gap:16px;margin-top:22px;color:var(--muted);font:12px ui-monospace,monospace}.muted{color:var(--muted)}
+@media(max-width:720px){main{padding:24px 18px}.hero{grid-template-columns:1fr}.intro{align-items:center}h1{letter-spacing:-1.3px}.intro p{font-size:14px}.status-panel{min-height:210px}.caption{display:none}td,th{padding:14px 12px}footer{flex-direction:column;gap:8px}.local{font-size:10px}.value{font-size:30px}.card{padding:18px}.status-title{font-size:44px}}
+</style>
+</head>
+<body><main>
+<header><div class="brand"><span class="mark" aria-hidden="true">o</span>obama<span class="muted" style="font-weight:400">/ bot</span></div><span class="local">LOCAL CONTROL ROOM</span></header>
+<section class="intro"><div><div class="eyebrow">At a glance</div><h1>Bot overview</h1><p>A little pulse check on your Discord companion.</p></div><button id="refresh" type="button">↻ Refresh</button></section>
+<section class="hero" aria-label="Live bot statistics">
+<div class="status-panel waiting" id="status-panel"><div class="panel-top"><span><span class="status-dot"></span>Discord connection</span><span class="signal" aria-hidden="true"><i></i><i></i><i></i><i></i></span></div><div role="status"><div class="status-title" id="status">Connecting…</div><p id="status-note">Checking in with the bot.</p></div></div>
+<div class="stats"><div class="card"><div class="label">Active guilds</div><div class="value" id="active">—</div><div class="detail">Available Discord servers</div></div><div class="card"><div class="label">Total guilds</div><div class="value" id="total">—</div><div class="detail">Servers the bot has joined</div></div><div class="card"><div class="label">Uptime</div><div class="value" id="uptime">—</div><div class="detail">Since the last connection</div></div><div class="card"><div class="label">Gateway latency</div><div class="value" id="ping">—</div><div class="detail">Discord heartbeat round trip</div></div></div>
+</section>
+<section class="servers"><div class="section-heading"><h2>Connected servers<span class="count" id="count">—</span></h2><span class="caption">Where Obama hangs out</span></div><div class="table-wrap"><table><thead><tr><th scope="col">Server</th><th scope="col">Members</th><th scope="col">Status</th></tr></thead><tbody id="guilds"><tr><td class="empty" colspan="3">Waiting for server data…</td></tr></tbody></table></div></section>
+<footer><span id="updated">Waiting for first update</span><span>LOCAL ONLY · REFRESHES EVERY 5s</span></footer>
+</main><script>
+const $ = (id) => document.getElementById(id);
+function uptime(ms) { if(ms === null) return '—'; const m = Math.floor(ms / 60000); if(m < 1) return '<1m'; if(m < 60) return m+'m'; const h = Math.floor(m/60); return h >= 24 ? Math.floor(h/24)+'d '+h%24+'h' : h+'h '+m%60+'m'; }
+function empty(text) { const row=document.createElement('tr'); const cell=document.createElement('td'); cell.colSpan=3; cell.className='empty'; cell.textContent=text; row.append(cell); $('guilds').replaceChildren(row); }
+let busy=false;
+async function refresh() {
+ if(busy) return; busy=true; $('refresh').disabled=true;
+ try {
+  const response=await fetch('/api/stats', {cache:'no-store',signal:AbortSignal.timeout(4000)});
+  if(!response.ok) throw new Error('Unavailable');
+  const data=await response.json();
+  $('status-panel').className='status-panel'+(data.online?'':' offline');
+  $('status').textContent=data.online?'Online & ready.':'Offline.';
+  $('status-note').textContent=data.online?'Obamabot is connected and ready for a conversation.':'The bot is not connected to Discord. Waiting for it to return.';
+  $('active').textContent=data.activeGuildCount; $('total').textContent=data.guildCount;
+  $('uptime').textContent=uptime(data.uptimeMs); $('ping').textContent=data.pingMs===null?'—':data.pingMs+' ms'; $('count').textContent=data.guildCount;
+  $('guilds').replaceChildren();
+  for(const guild of data.guilds) {
+   const row=document.createElement('tr'); const name=document.createElement('td'); const wrap=document.createElement('div'); wrap.className='guild';
+   const avatar=document.createElement('span'); avatar.className='avatar'; avatar.textContent=guild.name.slice(0,1).toUpperCase(); const title=document.createElement('span'); title.textContent=guild.name; wrap.append(avatar,title); name.append(wrap);
+   const members=document.createElement('td'); members.textContent=Number(guild.members).toLocaleString();
+   const status=document.createElement('td'); const badge=document.createElement('span'); badge.className='badge'+(guild.available?'':' unavailable'); badge.textContent=guild.available?'● Available':'○ Unavailable'; status.append(badge); row.append(name,members,status); $('guilds').append(row);
+  }
+  if(!data.guilds.length) empty(data.online?'No servers yet. Invite Obama to a Discord server to see it here.':'Server data will appear when the bot connects.');
+  $('updated').textContent='Updated '+new Date(data.updatedAt).toLocaleTimeString();
+ } catch {
+  $('status-panel').className='status-panel offline'; $('status').textContent='Unreachable.'; $('status-note').textContent='The local bot process may be stopped. Reconnecting automatically.';
+  for(const id of ['active','total','uptime','ping','count']) $(id).textContent='—';
+  empty('Live server data is unavailable.'); $('updated').textContent='Connection lost · retrying every 5s';
+ } finally {busy=false; $('refresh').disabled=false;}
+}
+$('refresh').addEventListener('click',refresh); refresh(); setInterval(refresh,5000);
+</script></body></html>`;

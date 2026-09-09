@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "waffle-music"
+version = "0.1.0"
+description = "Discord music, queues, and playful audio effects"
+requires-python = ">=3.11"
+dependencies = ["discord.py[voice]>=2.7,<3", "yt-dlp[default]>=2026.8.19", "python-dotenv>=1,<2"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.9"]
+
+[project.scripts]
+waffle = "waffle.bot:main"
+
+[tool.setuptools.packages.find]
+include = ["waffle*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
