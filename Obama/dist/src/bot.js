@@ -1,8 +1,13 @@
 import { ActivityType, AttachmentBuilder, Client, GatewayIntentBits, PermissionFlagsBits, } from "discord.js";
 import { pcmStereoToWav } from "./audio.js";
 import { CartesiaTts } from "./cartesia.js";
-import { parseCommand, matchWakeWord } from "./commands.js";
+import { parseCommand, matchBotMention, matchWakeWord, isVoiceStop } from "./commands.js";
 import { ConversationService } from "./conversation-service.js";
+import { ConversationModeService } from "./conversation-mode.js";
+import { DmBroadcastService } from "./dm-broadcast.js";
+import { buildGlobalStatus, canReadGlobalStatus } from "./global-status.js";
+import { LiveCaptions } from "./live-captions.js";
+import { IMAGE_UNDERSTANDING_PROMPT, isImageAttachment, loadAttachedImages } from "./image-understanding.js";
 import { GeminiImageGenerator } from "./providers/gemini-image-generator.js";
 import { OpenAIImageGenerator, imageExtension } from "./providers/openai-image-generator.js";
 import { ConversationMemory } from "./memory.js";
@@ -12,12 +17,20 @@ import { VoiceManager } from "./voice-manager.js";
 const HELP = [
     "**Conversation**",
     "`ObamaText <message>` — reply with text",
+    "@mention this bot anywhere in a message — reply with text",
+    "@mention with an attached image — explain the image (accompanying text is ignored)",
     "`ObamaStatus` — report live bot status in the current personality",
+    "`ObamaGlobalStatus` — all-server configuration report (bot application owner)",
     "`ObamaSpeak <message>` — reply with a WAV audio attachment",
     "`ObamaImage <prompt>` — generate an image attachment",
+    "`ObamaConversation on [chance %] [cooldown seconds]` — join this channel's chats (Manage Server; default 5%, 60s)",
+    "`ObamaConversation off|status` — disable or inspect this channel's mode",
+    "`ObamaDMAll <message>` — DM human server members (server owner)",
+    "`ObamaDMAll status|cancel` — inspect or stop the DM send (server owner)",
     "`ObamaJoin` / `ObamaLeave` — join or leave your voice channel",
     "",
     "**Voice and behavior**",
+    "Say `Obama, stop` to interrupt speech, then ask a follow-up.",
     "`ObamaRestart` — restart the bot (Administrator)",
     "`ObamaVoice list|set <name>|reset`",
     "`ObamaVoice add <name> <Cartesia voice ID>` / `remove <name>` (admin)",
@@ -25,7 +38,7 @@ const HELP = [
     "`ObamaMemory on|off|status|clear` (admin)",
     "`ObamaPrivacy` — explain voice data handling",
     "",
-    "In voice, say `Obama, <question>`, or say `Obama` and then your question.",
+    "In voice, mention `Obama` anywhere in what you say, or say `Obama` and then your question.",
 ].join("\n");
 const PRIVACY = "do whatever you want bruh i dont care";
 export class ObamaBot {
@@ -36,12 +49,17 @@ export class ObamaBot {
     settings;
     memory;
     conversations;
+    conversationMode;
+    dmBroadcasts;
     tts;
     voice;
     speechRecognition;
     armedUntil = new Map();
     activeImages = new Set();
-    activeVoiceResponses = new Set();
+    activeVoiceResponses = new Map();
+    voiceInterruptions = new Map();
+    activeVision = new Set();
+    captions;
     constructor(config, logger, restart) {
         this.config = config;
         this.logger = logger;
@@ -60,20 +78,24 @@ export class ObamaBot {
                 GatewayIntentBits.GuildMessages,
                 GatewayIntentBits.GuildVoiceStates,
                 GatewayIntentBits.MessageContent,
+                ...(config.enableMemberDms ? [GatewayIntentBits.GuildMembers] : []),
             ],
         });
+        this.captions = new LiveCaptions(this.client, logger);
         this.settings = new SettingsStore(config.dataDir, config.cartesiaDefaultVoiceId);
         this.memory = new ConversationMemory(config.maxMemoryMessages);
         const providers = createProviders(config);
         this.speechRecognition = providers.speechRecognition;
         this.conversations = new ConversationService(config, providers.chat, this.settings, this.memory, logger);
+        this.conversationMode = new ConversationModeService(this.settings, this.conversations, logger);
+        this.dmBroadcasts = new DmBroadcastService(logger);
         this.tts = new CartesiaTts(config.cartesiaApiKey, config.cartesiaModel);
         this.voice = new VoiceManager(this.client, config, logger, (utterance) => this.handleVoiceUtterance(utterance));
     }
     async start() {
         await this.settings.load();
         this.client.on("messageCreate", (message) => {
-            void this.handleMessage(message);
+            void this.handleMessage(message).catch((error) => this.logger.error("Message handling failed", error));
         });
         this.client.once("clientReady", (readyClient) => {
             this.logger.info(`Logged in as ${readyClient.user.tag}`);
@@ -81,16 +103,38 @@ export class ObamaBot {
         await this.client.login(this.config.discordToken);
     }
     async stop() {
+        this.conversationMode.stop();
+        this.dmBroadcasts.stop();
         this.voice.destroyAll();
         this.memory.clearAll();
         this.client.destroy();
     }
     async handleMessage(message) {
-        if (message.author.bot || !message.inGuild() || !message.member)
+        if (message.author.bot || message.webhookId || message.system || !message.inGuild() || !message.member)
             return;
-        const parsed = parseCommand(message.content);
-        if (parsed.kind === "none")
+        const images = [...(message.attachments?.values() ?? [])].filter(isImageAttachment);
+        if (images.length && this.client.user && matchBotMention(message.content, this.client.user.id).mentioned) {
+            await this.handleImageMention(message, images);
             return;
+        }
+        let parsed = parseCommand(message.content);
+        // Explicit commands keep their behavior; all other direct mentions get one text reply.
+        if (parsed.kind !== "command" && this.client.user) {
+            const mention = matchBotMention(message.content, this.client.user.id);
+            if (mention.mentioned) {
+                parsed = {
+                    kind: "command",
+                    command: {
+                        name: "text",
+                        prompt: mention.prompt || "I mentioned you without a question. Greet me briefly and ask what I need.",
+                    },
+                };
+            }
+        }
+        if (parsed.kind === "none") {
+            await this.conversationMode.handleMessage(message);
+            return;
+        }
         if (parsed.kind === "error") {
             await message.reply(parsed.message);
             return;
@@ -107,11 +151,65 @@ export class ObamaBot {
             await message.reply("That request failed. Check the bot logs for details.").catch(() => undefined);
         }
     }
+    async handleImageMention(message, attachments) {
+        if (this.activeVision.has(message.guildId)) {
+            await message.reply("I am already looking at an image in this server. Try again shortly.");
+            return;
+        }
+        this.activeVision.add(message.guildId);
+        try {
+            let images;
+            try {
+                images = await loadAttachedImages(attachments);
+            }
+            catch (error) {
+                await message.reply(error instanceof Error ? error.message : "Could not read the attached image.");
+                return;
+            }
+            await message.channel.sendTyping();
+            const response = await this.conversations.reply({
+                guildId: message.guildId, channelId: message.channelId,
+                displayName: message.member?.displayName ?? message.author.displayName,
+                prompt: IMAGE_UNDERSTANDING_PROMPT, images, source: "image",
+            });
+            await sendLongReply(message, response);
+        }
+        catch (error) {
+            this.logger.error("Image understanding failed", error);
+            await message.reply("I could not understand that image. Check that the configured chat model supports image input.").catch(() => undefined);
+        }
+        finally {
+            this.activeVision.delete(message.guildId);
+        }
+    }
     async executeCommand(message, command) {
         const guild = message.guild;
         const member = message.member;
         if (command.name === "help") {
             await message.reply(HELP);
+            return;
+        }
+        if (command.name === "conversation") {
+            await this.handleConversationCommand(message, command);
+            return;
+        }
+        if (command.name === "dm-all") {
+            if (member.id !== guild.ownerId) {
+                await message.reply("Only the **server owner** can send, inspect, or cancel server-wide DMs.");
+                return;
+            }
+            if (command.action === "status") {
+                await this.dmBroadcasts.status(message);
+            }
+            else if (command.action === "cancel") {
+                await this.dmBroadcasts.cancel(message);
+            }
+            else if (!this.config.enableMemberDms) {
+                await message.reply("DM broadcasts need **Server Members Intent** enabled on the bot's Discord Developer Portal page, plus `ENABLE_MEMBER_DMS=true` in Obama's `.env`. Enable both, then restart Obama from the control center.");
+            }
+            else {
+                await this.dmBroadcasts.start(message, command.text);
+            }
             return;
         }
         if (command.name === "restart") {
@@ -171,6 +269,19 @@ export class ObamaBot {
             finally {
                 this.activeImages.delete(guild.id);
             }
+            return;
+        }
+        if (command.name === "global-status") {
+            if (!await canReadGlobalStatus(this.client, message.author.id)) {
+                await message.reply("Only the bot application owner (or its owning team's owner) can view settings across all servers.");
+                return;
+            }
+            const report = buildGlobalStatus(this.client, this.settings, this.config, this.voice);
+            await message.reply({
+                content: `Global configuration: **${report.serverCount} servers**, **${report.conversationCount} enabled conversation channels**. Full instructions, voices, and settings are attached.`,
+                files: [new AttachmentBuilder(Buffer.from(report.text, "utf8"), { name: "obama-global-status.txt" })],
+                allowedMentions: { parse: [], repliedUser: false },
+            });
             return;
         }
         if (command.name === "status") {
@@ -240,6 +351,41 @@ export class ObamaBot {
             return;
         }
         await this.handleMemoryCommand(message, command);
+    }
+    async handleConversationCommand(message, command) {
+        const guildId = message.guild.id;
+        const channelId = message.channel.id;
+        const current = this.settings.get(guildId).conversationChannels[channelId];
+        if (command.action === "status") {
+            await message.reply(current
+                ? `Conversation mode is **on** in this channel: **${current.chancePercent}%** chance per new human message, **${current.cooldownSeconds}s** cooldown, using the latest **15 messages** including the triggering message.`
+                : "Conversation mode is **off** in this channel. Use `ObamaConversation on` to enable it (Manage Server).");
+            return;
+        }
+        requireManager(message.member);
+        if (command.action === "off") {
+            this.conversationMode.invalidate(channelId);
+            await this.settings.mutate(guildId, (settings) => {
+                delete settings.conversationChannels[channelId];
+            });
+            await message.reply("Conversation mode is now **off** in this channel.");
+            return;
+        }
+        const botUser = this.client.user;
+        const permissions = botUser ? message.channel.permissionsFor(botUser) : null;
+        const sendPermission = message.channel.isThread()
+            ? PermissionFlagsBits.SendMessagesInThreads : PermissionFlagsBits.SendMessages;
+        if (!permissions?.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory, sendPermission])) {
+            await message.reply("I need **View Channel**, **Read Message History**, and **Send Messages** (or **Send Messages in Threads**) here to enable conversation mode.");
+            return;
+        }
+        const chancePercent = command.chancePercent ?? current?.chancePercent ?? 5;
+        const cooldownSeconds = command.cooldownSeconds ?? current?.cooldownSeconds ?? 60;
+        this.conversationMode.invalidate(channelId);
+        await this.settings.mutate(guildId, (settings) => {
+            settings.conversationChannels[channelId] = { chancePercent, cooldownSeconds };
+        });
+        await message.reply(`Conversation mode is now **on** in this channel: **${chancePercent}%** chance per new human message and a **${cooldownSeconds}s** cooldown. Replies use up to the latest **15 messages**, sent to the configured AI provider. Use \`ObamaConversation off\` to disable it.`);
     }
     async handleVoiceCommand(message, command) {
         const guildId = message.guild.id;
@@ -345,87 +491,60 @@ export class ObamaBot {
         await message.reply(`Runtime conversation memory is now **${enabled ? "on" : "off"}**${enabled ? "; it will still reset on restart." : ". Existing memory was cleared."}`);
     }
     async handleVoiceUtterance(utterance) {
-        const transcriptionStartedAt = Date.now();
+        const { guildId, channelId, userId } = utterance;
+        const generation = this.voiceInterruptions.get(guildId) ?? 0;
+        const sessionCurrent = () => (utterance.isCurrent?.() ?? true) &&
+            (this.voiceInterruptions.get(guildId) ?? 0) === generation;
         const transcript = await this.speechRecognition.transcribe(pcmStereoToWav(utterance.pcm));
-        this.logger.info("Voice heard", {
-            provider: this.config.sttProvider,
-            guildId: utterance.guildId,
-            channelId: utterance.channelId,
-            userId: utterance.userId,
-            durationMs: Date.now() - transcriptionStartedAt,
-            transcript,
-        });
-        if (!transcript) {
-            this.logger.info("Voice ignored: empty transcript", {
-                guildId: utterance.guildId,
-                userId: utterance.userId,
-            });
+        if (!sessionCurrent() || !transcript)
+            return;
+        this.logger.info("Voice heard", { guildId, channelId, userId, transcript });
+        const armKey = `${guildId}:${userId}`;
+        // Stop is checked before the busy/feedback guards so it also cancels pending TTS.
+        if (isVoiceStop(transcript, this.config.wakeWord)) {
+            this.voiceInterruptions.set(guildId, generation + 1);
+            this.activeVoiceResponses.delete(guildId);
+            this.voice.interrupt(guildId);
+            this.armedUntil.set(armKey, Date.now() + this.config.wakeFollowupMs);
+            this.captions.post(guildId, channelId, userId, transcript);
+            this.captions.post(guildId, channelId, "Obama", "[Speech interrupted]");
             return;
         }
-        const armKey = `${utterance.guildId}:${utterance.userId}`;
+        // Only stop requests may pass through playback/cooldown capture, preventing echo replies.
+        if (utterance.duringPlayback || this.activeVoiceResponses.has(guildId))
+            return;
         const armed = (this.armedUntil.get(armKey) ?? 0) > Date.now();
-        let prompt = "";
-        if (armed) {
-            this.armedUntil.delete(armKey);
-            prompt = transcript;
-        }
-        else {
-            const wake = matchWakeWord(transcript, this.config.wakeWord);
-            if (!wake.woke) {
-                this.logger.info("Voice ignored: wake word not found", {
-                    guildId: utterance.guildId,
-                    userId: utterance.userId,
-                });
-                return;
-            }
-            if (!wake.prompt) {
-                this.armedUntil.set(armKey, Date.now() + this.config.wakeFollowupMs);
-                this.logger.info("Voice wake word armed", {
-                    guildId: utterance.guildId,
-                    userId: utterance.userId,
-                    followupMs: this.config.wakeFollowupMs,
-                });
-                const acknowledgement = await this.tts.synthesize("Yes?", this.settings.getSelectedVoiceId(utterance.guildId));
-                this.voice.speak(utterance.guildId, acknowledgement.discordPcm);
-                return;
-            }
-            prompt = wake.prompt;
-        }
-        if (this.activeVoiceResponses.has(utterance.guildId)) {
-            this.logger.warn("Voice trigger ignored: already answering", {
-                guildId: utterance.guildId,
-                channelId: utterance.channelId,
-                userId: utterance.userId,
-                prompt,
-            });
+        const wake = matchWakeWord(transcript, this.config.wakeWord);
+        if (!armed && !wake.woke)
             return;
-        }
-        this.activeVoiceResponses.add(utterance.guildId);
+        this.armedUntil.delete(armKey);
+        const prompt = wake.woke ? wake.prompt : transcript;
+        if (!prompt)
+            this.armedUntil.set(armKey, Date.now() + this.config.wakeFollowupMs);
+        const token = Symbol("voice response");
+        this.activeVoiceResponses.set(guildId, token);
+        const current = () => sessionCurrent() && this.activeVoiceResponses.get(guildId) === token;
         try {
-            const user = await this.client.users.fetch(utterance.userId).catch(() => undefined);
-            const response = await this.conversations.reply({
-                guildId: utterance.guildId,
-                channelId: utterance.channelId,
-                displayName: user?.displayName ?? user?.username ?? utterance.userId,
-                prompt,
-                source: "voice",
-            });
-            this.logger.info("Cartesia synthesizing voice response", {
-                guildId: utterance.guildId,
-                channelId: utterance.channelId,
-                characters: response.length,
-            });
-            const audio = await this.tts.synthesize(response, this.settings.getSelectedVoiceId(utterance.guildId));
-            const queued = this.voice.speak(utterance.guildId, audio.discordPcm);
-            this.logger.info("Voice response queued", {
-                guildId: utterance.guildId,
-                channelId: utterance.channelId,
-                queued,
-                pcmBytes: audio.discordPcm.length,
-            });
+            const user = await this.client.users.fetch(userId).catch(() => undefined);
+            if (!current())
+                return;
+            const displayName = user?.displayName ?? user?.username ?? userId;
+            this.captions.post(guildId, channelId, displayName, transcript);
+            const response = prompt ? await this.conversations.reply({
+                guildId, channelId, displayName, prompt, source: "voice",
+            }) : "Yes?";
+            if (!current())
+                return;
+            const audio = await this.tts.synthesize(response, this.settings.getSelectedVoiceId(guildId));
+            if (!current())
+                return;
+            if (this.voice.speak(guildId, audio.discordPcm)) {
+                this.captions.post(guildId, channelId, "Obama", response);
+            }
         }
         finally {
-            this.activeVoiceResponses.delete(utterance.guildId);
+            if (this.activeVoiceResponses.get(guildId) === token)
+                this.activeVoiceResponses.delete(guildId);
         }
     }
 }

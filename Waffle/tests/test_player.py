@@ -91,6 +91,8 @@ async def test_player_passes_headers_to_ffmpeg(setup_player, monkeypatch):
         await until(lambda: len(callbacks) == 1)
         assert factory.call_args.args == ('https://test.googlevideo.com/audio',)
         assert 'User-Agent: Test client\r\n' in factory.call_args.kwargs['before_options']
+        assert factory.call_args.kwargs['bitrate'] == 192
+        assert '-application audio -vbr on' in factory.call_args.kwargs['options']
     finally:
         await p.close()
 
@@ -122,4 +124,85 @@ async def test_late_callback_from_skipped_track_cannot_finish_next(setup_player)
         assert p.current.title == 'B'
         assert not p.done.is_set()
     finally:
+        await p.close()
+
+
+async def test_batch_appends_in_order_and_only_accepts_remaining_capacity(setup_player):
+    voice, _callbacks, channel, yt = setup_player
+    p = Player(voice, channel, yt, max_queue=3)
+    tracks = [Track(str(i), str(i), 10, 1) for i in range(4)]
+    try:
+        p.add(tracks[0])
+        assert p.add_many(tracks[1:]) == 2
+        assert list(p.queue) == tracks[:3]
+        with pytest.raises(ValueError, match='full'):
+            p.add_many(tracks)
+        assert list(p.queue) == tracks[:3]
+    finally:
+        await p.close()
+    with pytest.raises(ValueError, match='disconnected'):
+        p.add_many(tracks)
+
+
+@pytest.mark.parametrize('finish', ['natural', 'skip', 'close', 'error'])
+async def test_started_source_cleanup_belongs_to_discord(setup_player, finish):
+    voice, callbacks, channel, yt = setup_player
+    p = Player(voice, channel, yt)
+    try:
+        p.add_many([Track('A', 'a', 10, 1), Track('B', 'b', 10, 1)])
+        await until(lambda: len(callbacks) == 1)
+        source = voice.play.call_args.args[0]
+        if finish == 'close':
+            await p.close()
+        elif finish == 'skip':
+            p.skip()
+        else:
+            callbacks[0](RuntimeError('audio failed') if finish == 'error' else None)
+        if finish != 'close':
+            await until(lambda: len(callbacks) == 2)
+            assert p.current.title == 'B'
+        # Discord's audio thread may still be cleaning up after calling after().
+        # The queue worker must never touch the same process's cleanup.
+        source.cleanup.assert_not_called()
+    finally:
+        await p.close()
+
+
+@pytest.mark.parametrize('cleanup_fails', [False, True])
+async def test_rejected_source_cleanup_does_not_block_or_kill_queue(setup_player, cleanup_fails):
+    import threading
+
+    voice, callbacks, channel, yt = setup_player
+    entered, release = threading.Event(), threading.Event()
+    sources = []
+    event_loop_thread = threading.get_ident()
+
+    def cleanup():
+        assert threading.get_ident() != event_loop_thread
+        entered.set()
+        assert release.wait(2)
+        if cleanup_fails:
+            raise RuntimeError('cleanup failed')
+
+    def play(source, after):
+        sources.append(source)
+        if len(sources) == 1:
+            source.cleanup.side_effect = cleanup
+            raise RuntimeError('play rejected')
+        callbacks.append(after)
+
+    voice.play.side_effect = play
+    p = Player(voice, channel, yt)
+    try:
+        p.add_many([Track('A', 'a', 10, 1), Track('B', 'b', 10, 1)])
+        await until(entered.is_set)
+        # Reaching here while cleanup waits proves the event loop stays responsive.
+        assert not p.task.done()
+        release.set()
+        await until(lambda: len(callbacks) == 1)
+        assert p.current.title == 'B'
+        sources[0].cleanup.assert_called_once()
+        sources[1].cleanup.assert_not_called()
+    finally:
+        release.set()
         await p.close()

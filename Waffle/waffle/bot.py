@@ -9,7 +9,7 @@ import discord
 from discord import app_commands
 from dotenv import load_dotenv
 
-from .audio import PRESETS, YTDLP_VERSION, YouTube, check_ytdlp_version
+from .audio import PRESETS, YTDLP_VERSION, YouTube, check_ytdlp_version, playlist_target
 from .player import Player
 
 
@@ -52,6 +52,11 @@ class Waffle(discord.Client):
             await player.close()
 
     async def enqueue(self, interaction, track):
+        await self.enqueue_many(interaction, [track])
+
+    async def enqueue_many(self, interaction, tracks, *, playlist_limit=None):
+        if not tracks:
+            raise ValueError("No playable videos found.")
         guild = interaction.guild
         if guild is None:
             raise ValueError("Use this command in a server.")
@@ -75,8 +80,15 @@ class Waffle(discord.Client):
                 self.players[guild.id] = player
             elif player.voice.channel != channel:
                 raise ValueError("Join my voice channel before adding songs.")
-            player.add(track)
-        await interaction.followup.send(f"🧇 Queued **{discord.utils.escape_markdown(track.title)}**")
+            added = player.add_many(tracks)
+        if playlist_limit is not None:
+            message = f"🧇 Queued **{added} songs** from the playlist, in order."
+            message += f" Imports check up to {playlist_limit} playlist entries; unavailable and live entries are skipped."
+            if added < len(tracks):
+                message += f" Queue limit reached; {len(tracks) - added} additional songs did not fit."
+        else:
+            message = f"🧇 Queued **{discord.utils.escape_markdown(tracks[0].title)}**"
+        await interaction.followup.send(message)
 
 
 def listener_channel(interaction):
@@ -148,13 +160,18 @@ async def report_error(interaction, error):
 bot.tree.on_error = report_error
 
 
-@bot.tree.command(description="Play a YouTube song name or direct video link")
+@bot.tree.command(description="Play a YouTube song, video link, or playlist link")
 @app_commands.guild_only()
 async def play(interaction: discord.Interaction, query: str):
     listener_channel(interaction)
     await interaction.response.defer()
-    tracks = await bot.youtube.search(query, interaction.user.id)
-    await bot.enqueue(interaction, tracks[0])
+    if playlist_target(query):
+        limit = int(os.getenv("MAX_QUEUE", "100"))
+        tracks = await bot.youtube.search(query, interaction.user.id, limit, playlist=True)
+        await bot.enqueue_many(interaction, tracks, playlist_limit=limit)
+    else:
+        tracks = await bot.youtube.search(query, interaction.user.id)
+        await bot.enqueue(interaction, tracks[0])
 
 
 @bot.tree.command(description="Look up five YouTube results and choose one")
@@ -279,6 +296,7 @@ async def eq(interaction: discord.Interaction, bass: app_commands.Range[int, -12
 async def help(interaction: discord.Interaction):
     await interaction.response.send_message(
         "**🧇 Waffle music**\n/play song-or-link · /search song\n"
+        "/play also imports YouTube playlist links in order, up to the queue limit.\n"
         "/pause toggles pause/resume · /skip · /stop\n"
         "/queue [page] · /nowplaying · /shuffle · /remove position · /loop\n"
         "/effect · /eq · /volume (sound changes apply on the next track)\n"
@@ -307,7 +325,7 @@ def main():
                 raise ValueError()
         except ValueError:
             raise SystemExit(f"Invalid {key}; see .env.example.") from None
-    bot.run(token)
+    bot.run(token, log_handler=None)
 
 
 if __name__ == "__main__":

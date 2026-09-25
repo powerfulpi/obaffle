@@ -1,9 +1,36 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
-import type { GuildSettings, PersistedSettings } from "./types.js";
+import type { ConversationChannelSettings, GuildSettings, PersistedSettings } from "./types.js";
 
 const VOICE_ALIAS_PATTERN = /^[a-z0-9][a-z0-9_-]{0,31}$/;
+
+function sanitizeConversationChannels(value: unknown): Record<string, ConversationChannelSettings> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  const channels: Array<[string, ConversationChannelSettings]> = [];
+  for (const [channelId, candidate] of Object.entries(value)) {
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+      continue;
+    }
+    const { chancePercent, cooldownSeconds } = candidate as Partial<ConversationChannelSettings>;
+    if (
+      typeof chancePercent !== "number" ||
+      !Number.isFinite(chancePercent) ||
+      chancePercent <= 0 ||
+      chancePercent > 100 ||
+      typeof cooldownSeconds !== "number" ||
+      !Number.isSafeInteger(cooldownSeconds) ||
+      cooldownSeconds < 0 ||
+      cooldownSeconds > 86_400
+    ) {
+      continue;
+    }
+    channels.push([channelId, { chancePercent, cooldownSeconds }]);
+  }
+  return Object.fromEntries(channels);
+}
 
 export function normalizeVoiceAlias(alias: string): string {
   const normalized = alias.trim().toLowerCase();
@@ -36,6 +63,9 @@ export class SettingsStore {
         throw new Error("Unsupported settings file format");
       }
       this.data = parsed as PersistedSettings;
+      for (const settings of Object.values(this.data.guilds)) {
+        settings.conversationChannels = sanitizeConversationChannels(settings.conversationChannels);
+      }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
         throw error;
@@ -46,6 +76,7 @@ export class SettingsStore {
   public get(guildId: string): GuildSettings {
     const existing = this.data.guilds[guildId];
     if (existing) {
+      existing.conversationChannels = sanitizeConversationChannels(existing.conversationChannels);
       existing.voices.original = this.originalVoiceId;
       if (!existing.voices[existing.selectedVoice]) {
         existing.selectedVoice = "original";
@@ -58,9 +89,14 @@ export class SettingsStore {
       voices: { original: this.originalVoiceId },
       instructions: null,
       memoryEnabled: true,
+      conversationChannels: {},
     };
     this.data.guilds[guildId] = created;
     return created;
+  }
+
+  public snapshot(): Record<string, GuildSettings> {
+    return Object.fromEntries(Object.keys(this.data.guilds).map((id) => [id, structuredClone(this.get(id))]));
   }
 
   public getSelectedVoiceId(guildId: string): string {
@@ -74,6 +110,7 @@ export class SettingsStore {
   ): Promise<GuildSettings> {
     const settings = this.get(guildId);
     mutation(settings);
+    settings.conversationChannels = sanitizeConversationChannels(settings.conversationChannels);
     await this.save();
     return settings;
   }

@@ -6,7 +6,7 @@ from collections import deque
 
 import discord
 
-from .audio import filters
+from .audio import YouTubeError, filters
 
 log = logging.getLogger(__name__)
 
@@ -28,12 +28,18 @@ class Player:
         self.task = asyncio.create_task(self.run())
 
     def add(self, track):
+        self.add_many([track])
+
+    def add_many(self, tracks):
+        """Append one contiguous batch, returning the number that fit."""
         if self.closed:
             raise ValueError("The player disconnected. Run /play again.")
         if len(self.queue) >= self.max_queue:
             raise ValueError(f"Queue is full ({self.max_queue} songs).")
-        self.queue.append(track)
+        accepted = tracks[:self.max_queue - len(self.queue)]
+        self.queue.extend(accepted)
         self.wake.set()
+        return len(accepted)
 
     async def say(self, message):
         try:
@@ -78,6 +84,7 @@ class Player:
                 self.done = asyncio.Event()
                 failed = False
                 source = None
+                playback_started = False
                 try:
                     stream = await self.youtube.stream(self.current)
                     if self.closed:
@@ -85,7 +92,9 @@ class Player:
                     if not self.skip_requested:
                         source = discord.FFmpegOpusAudio(
                             stream.url, before_options=stream.ffmpeg_before_options(),
-                            options=f'-vn -af "{filters(self.preset, *self.eq, self.volume)}"',
+                            bitrate=192,
+                            options=(f'-vn -af "{filters(self.preset, *self.eq, self.volume)}" '
+                                     '-application audio -vbr on -compression_level 10 -frame_duration 20'),
                         )
                         loop = asyncio.get_running_loop()
                         errors = []
@@ -94,20 +103,31 @@ class Player:
                                 failures.append(error)
                             event_loop.call_soon_threadsafe(finished.set)
                         self.voice.play(source, after=after)
+                        playback_started = True
                         await self.say(f"🎶 Now playing **{discord.utils.escape_markdown(self.current.title)}**\n<{self.current.url}>")
                         await self.done.wait()
                         if errors:
                             raise RuntimeError("Voice playback failed") from errors[0]
                 except asyncio.CancelledError:
                     raise
-                except Exception:
+                except Exception as exc:
                     failed = True
                     log.exception("Playback failed")
-                    await self.say("Couldn't play that track. Skipping it; try another upload or update yt-dlp.")
+                    reason = str(exc) if isinstance(exc, YouTubeError) else "Audio playback failed. The bot owner can check the logs for the cause."
+                    await self.say(f"Couldn't play that track. {reason} Skipping it.")
                 finally:
                     if source is not None:
-                        self.voice.stop()
-                        source.cleanup()
+                        if playback_started:
+                            # discord.py calls after() before cleaning up on its
+                            # audio thread. Never race that cleanup from here.
+                            self.voice.stop()
+                        else:
+                            # play() rejected the source, so ownership never
+                            # transferred. Process termination can block.
+                            try:
+                                await asyncio.to_thread(source.cleanup)
+                            except Exception:
+                                log.exception("Failed to clean up unused audio source")
                 if not self.closed and not failed and not self.skip_requested:
                     if self.loop == "track":
                         self.queue.appendleft(self.current)

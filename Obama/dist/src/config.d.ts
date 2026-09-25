@@ -2,6 +2,7 @@ import "dotenv/config";
 import type { ProviderName } from "./types.js";
 export interface AppConfig {
     discordToken: string;
+    enableMemberDms: boolean;
     aiProvider: ProviderName;
     sttProvider: ProviderName;
     openaiApiKey: string | undefined;

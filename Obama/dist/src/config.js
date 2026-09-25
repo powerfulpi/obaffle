@@ -31,6 +31,7 @@ export function loadConfig(options = {}) {
     const sttProvider = enumValue("STT_PROVIDER", "gemini", ["openai", "gemini"]);
     const config = {
         discordToken: process.env.DISCORD_TOKEN ?? "",
+        enableMemberDms: enumValue("ENABLE_MEMBER_DMS", "false", ["true", "false"]) === "true",
         aiProvider,
         sttProvider,
         openaiApiKey: process.env.OPENAI_API_KEY || undefined,

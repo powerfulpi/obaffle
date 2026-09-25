@@ -18,7 +18,18 @@ export class OpenAIProvider {
             body: JSON.stringify({
                 model: this.chatModel,
                 instructions: request.instructions,
-                input: request.messages,
+                input: request.messages.map((message) => ({
+                    role: message.role,
+                    content: message.images?.length
+                        ? [
+                            { type: "input_text", text: message.content },
+                            ...message.images.map((image) => ({
+                                type: "input_image", detail: "auto",
+                                image_url: `data:${image.mimeType};base64,${image.data}`,
+                            })),
+                        ]
+                        : message.content,
+                })),
                 ...(this.chatModel === "gpt-5-nano"
                     ? { reasoning: { effort: "minimal" } }
                     : {}),

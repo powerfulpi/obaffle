@@ -40,6 +40,7 @@ function numberInRange(name: string, fallback: number, minimum: number, maximum:
 
 export interface AppConfig {
   discordToken: string;
+  enableMemberDms: boolean;
   aiProvider: ProviderName;
   sttProvider: ProviderName;
   openaiApiKey: string | undefined;
@@ -74,6 +75,7 @@ export function loadConfig(options: { validateSecrets?: boolean } = {}): AppConf
   const sttProvider = enumValue<ProviderName>("STT_PROVIDER", "gemini", ["openai", "gemini"]);
   const config: AppConfig = {
     discordToken: process.env.DISCORD_TOKEN ?? "",
+    enableMemberDms: enumValue("ENABLE_MEMBER_DMS", "false", ["true", "false"]) === "true",
     aiProvider,
     sttProvider,
     openaiApiKey: process.env.OPENAI_API_KEY || undefined,

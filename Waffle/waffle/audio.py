@@ -1,13 +1,31 @@
 """YouTube lookup and fixed, validated FFmpeg filter chains."""
 import asyncio
+import logging
 import shlex
 import sys
 from dataclasses import dataclass
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlencode, urlparse
 
 import yt_dlp
 from yt_dlp.utils import is_outdated_version
 from yt_dlp.version import __version__ as YTDLP_VERSION
+
+log = logging.getLogger(__name__)
+
+
+class YouTubeError(ValueError):
+    """A safe, actionable extraction error for listeners."""
+
+
+def extraction_failure(error):
+    message = str(error).lower()
+    if any(text in message for text in ("sign in", "sign-in", "not a bot", "confirm your age", "429", "too many requests")):
+        return YouTubeError("YouTube requires sign-in or is rate-limiting this bot's connection. Try again later; the bot owner may need to check the hosting network."), False
+    if any(text in message for text in ("private video", "video unavailable", "video is unavailable", "removed", "not available in your country", "members-only")):
+        return YouTubeError("That video is unavailable to this bot. Try another public upload."), False
+    if any(text in message for text in ("403", "timed out", "timeout", "connection reset", "502", "503", "504", "remote end closed")):
+        return YouTubeError("YouTube's audio connection failed after a retry. Try again shortly; if it persists, the bot owner should check yt-dlp and the hosting network."), True
+    return YouTubeError("Couldn't resolve YouTube audio. Try another upload; the bot owner can check the logs and update yt-dlp with its default extras."), False
 
 # Match the minimum in pyproject.toml, even when launched without installing Waffle.
 MIN_YTDLP_VERSION = "2026.08.19"
@@ -52,7 +70,8 @@ class Stream:
     headers: dict[str, str]
 
     def ffmpeg_before_options(self):
-        options = '-nostdin -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -rw_timeout 15000000'
+        options = ('-nostdin -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 '
+                   '-reconnect_on_network_error 1 -reconnect_on_http_error 5xx -rw_timeout 15000000')
         header_lines = []
         for name, value in self.headers.items():
             if any(char in name + value for char in '\r\n\0') or ':' in name:
@@ -72,36 +91,60 @@ def query_target(query: str, limit: int = 1) -> str:
         if parsed.scheme != "https" or parsed.hostname not in {
             "youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"
         } or parsed.username or parsed.port not in (None, 443):
-            raise ValueError("Direct links must be HTTPS YouTube video links.")
-        if parsed.path == "/playlist":
-            raise ValueError("Use a video link; playlist imports are not supported.")
+            raise ValueError("Direct links must be HTTPS YouTube video or playlist links.")
+        if parsed.path.rstrip('/') == "/playlist" and not parse_qs(parsed.query).get("list"):
+            raise ValueError("That playlist link is missing its list ID.")
         return query
     return f"ytsearch{limit}:{query}"
+
+
+def playlist_target(query: str):
+    target = query_target(query)
+    parsed = urlparse(target)
+    playlist_id = parse_qs(parsed.query).get("list") if parsed.scheme == "https" else None
+    if playlist_id:
+        return "https://www.youtube.com/playlist?" + urlencode({"list": playlist_id[0]})
+    return None
 
 
 class YouTube:
     def __init__(self):
         self.slots = asyncio.Semaphore(3)
 
-    async def extract(self, target: str, flat: bool = False):
+    async def extract(self, target: str, flat: bool = False, playlist_limit: int | None = None):
         async with self.slots:
             def run():
                 with yt_dlp.YoutubeDL({
                     "format": "bestaudio/best", "quiet": True,
                     "check_formats": "selected" if not flat else None,
-                    "noplaylist": True, "extract_flat": "in_playlist" if flat else False,
+                    "noplaylist": True,
+                    "playlistend": playlist_limit,
+                    "extract_flat": "in_playlist" if flat else False,
                     "socket_timeout": 15, "retries": 2,
                     "js_runtimes": {"deno": {}, "node": {}},
                 }) as ydl:
                     return ydl.extract_info(target, download=False)
-            return await asyncio.to_thread(run)
+            for attempt in range(2):
+                try:
+                    return await asyncio.to_thread(run)
+                except yt_dlp.utils.DownloadError as exc:
+                    error, retryable = extraction_failure(exc)
+                    if not retryable or attempt:
+                        log.exception("YouTube extraction failed")
+                        raise error from exc
+                    log.warning("Temporary YouTube extraction failure; retrying once")
+                    await asyncio.sleep(1)
 
-    async def search(self, query: str, requester: int, limit: int = 1):
-        data = await self.extract(query_target(query, limit), flat=True)
+    async def search(self, query: str, requester: int, limit: int = 1, *, playlist: bool = False):
+        target = playlist_target(query) if playlist else None
+        data = await self.extract(target or query_target(query, limit), flat=True, playlist_limit=limit)
         entries = list(data.get("entries", [data])) if data else []
         tracks = []
         for item in entries:
-            if not item or item.get("is_live") or item.get("live_status") == "is_live":
+            if (not item or item.get("is_live")
+                    or item.get("live_status") in {"is_live", "is_upcoming"}
+                    or item.get("availability") in {"private", "premium_only", "subscriber_only", "needs_auth"}
+                    or item.get("title") in {"[Private video]", "[Deleted video]"}):
                 continue
             video_id = item.get("id", "")
             # Reconstruct canonical URLs, never pass arbitrary extractor URLs to FFmpeg.
@@ -111,7 +154,7 @@ class YouTube:
                                 f"https://www.youtube.com/watch?v={video_id}",
                                 int(item.get("duration") or 0), requester))
         if not tracks:
-            raise ValueError("No playable videos found. Try another song or video link.")
+            raise ValueError("No playable videos found. Try another song, video, or public playlist link.")
         return tracks[:limit]
 
     async def stream(self, track: Track):
@@ -132,4 +175,5 @@ def filters(preset: str, bass: int, mid: int, treble: int, volume: int) -> str:
         raise ValueError("Volume must be 0–150")
     return (f"aresample=48000,{PRESETS[preset]},"
             f"equalizer=f=100:t=q:w=1:g={bass},equalizer=f=1000:t=q:w=1:g={mid},"
-            f"equalizer=f=8000:t=q:w=1:g={treble},volume={volume / 100},alimiter=limit=0.95")
+            f"equalizer=f=8000:t=q:w=1:g={treble},volume={volume / 100},"
+            "alimiter=limit=0.95:level=disabled:latency=1")

@@ -27,6 +27,8 @@ export interface VoiceUtterance {
   channelId: string;
   userId: string;
   pcm: Buffer;
+  duringPlayback?: boolean;
+  isCurrent?: () => boolean;
 }
 
 type UtteranceHandler = (utterance: VoiceUtterance) => Promise<void>;
@@ -143,6 +145,10 @@ export class VoiceManager {
     return true;
   }
 
+  public interrupt(guildId: string): void {
+    this.sessions.get(guildId)?.interrupt();
+  }
+
   public isConnected(guildId: string): boolean {
     return this.sessions.has(guildId);
   }
@@ -181,7 +187,7 @@ function formatVoiceConnectionState(state: VoiceConnectionTelemetry): string {
   return parts.join(", ");
 }
 
-class VoiceSession {
+export class VoiceSession {
   private readonly player: AudioPlayer;
   private readonly queue: Buffer[] = [];
   private readonly activeRecordings = new Set<string>();
@@ -244,6 +250,12 @@ class VoiceSession {
     if (this.player.state.status === AudioPlayerStatus.Idle) this.playNext();
   }
 
+  public interrupt(): void {
+    this.queue.length = 0;
+    this.player.stop(true);
+    this.suppressCaptureUntil = 0;
+  }
+
   public destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
@@ -275,15 +287,7 @@ class VoiceSession {
 
   private async capture(userId: string): Promise<void> {
     if (this.destroyed || this.activeRecordings.has(userId)) return;
-    if (this.captureIsSuppressed()) {
-      this.logger.info("Voice input suppressed during playback guard", {
-        guildId: this.guildId,
-        channelId: this.channelId,
-        userId,
-        remainingMs: this.suppressCaptureUntil - Date.now(),
-      });
-      return;
-    }
+    let duringPlayback = this.captureIsSuppressed();
     // Reserve the user before the network lookup so duplicate speaking-start
     // events cannot subscribe to the same utterance concurrently.
     this.activeRecordings.add(userId);
@@ -292,16 +296,7 @@ class VoiceSession {
       this.activeRecordings.delete(userId);
       return;
     }
-    if (this.captureIsSuppressed()) {
-      this.activeRecordings.delete(userId);
-      this.logger.info("Voice input suppressed during playback guard", {
-        guildId: this.guildId,
-        channelId: this.channelId,
-        userId,
-        remainingMs: this.suppressCaptureUntil - Date.now(),
-      });
-      return;
-    }
+    duringPlayback ||= this.captureIsSuppressed();
 
     const opusStream = this.connection.receiver.subscribe(userId, {
       end: {
@@ -325,16 +320,7 @@ class VoiceSession {
       finished = true;
       this.activeRecordings.delete(userId);
       if (discarded || size === 0 || this.destroyed) return;
-      if (this.captureIsSuppressed()) {
-        this.logger.info("Voice utterance discarded during playback guard", {
-          guildId: this.guildId,
-          channelId: this.channelId,
-          userId,
-          pcmBytes: size,
-          remainingMs: this.suppressCaptureUntil - Date.now(),
-        });
-        return;
-      }
+      duringPlayback ||= this.captureIsSuppressed();
       const pcm = Buffer.concat(chunks, size);
       const activity = analyzePcm16(pcm);
       const telemetry = {
@@ -374,6 +360,8 @@ class VoiceSession {
         channelId: this.channelId,
         userId,
         pcm,
+        duringPlayback,
+        isCurrent: () => !this.destroyed,
       }).catch((error: unknown) => {
         this.logger.error("Voice utterance processing failed", error);
       });
@@ -381,6 +369,7 @@ class VoiceSession {
 
     decoder.on("data", (chunk: Buffer) => {
       if (discarded) return;
+      duringPlayback ||= this.captureIsSuppressed();
       size += chunk.length;
       if (size > maximumBytes) {
         discarded = true;
@@ -409,6 +398,6 @@ class VoiceSession {
   }
 
   private captureIsSuppressed(): boolean {
-    return Date.now() < this.suppressCaptureUntil;
+    return this.player.state.status !== AudioPlayerStatus.Idle || Date.now() < this.suppressCaptureUntil;
   }
 }

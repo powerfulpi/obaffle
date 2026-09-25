@@ -94,6 +94,9 @@ export class VoiceManager {
         session.enqueue(discordPcm);
         return true;
     }
+    interrupt(guildId) {
+        this.sessions.get(guildId)?.interrupt();
+    }
     isConnected(guildId) {
         return this.sessions.has(guildId);
     }
@@ -126,7 +129,7 @@ function formatVoiceConnectionState(state) {
         parts.push(`closeCode=${state.closeCode}`);
     return parts.join(", ");
 }
-class VoiceSession {
+export class VoiceSession {
     client;
     guildId;
     channelId;
@@ -192,6 +195,11 @@ class VoiceSession {
         if (this.player.state.status === AudioPlayerStatus.Idle)
             this.playNext();
     }
+    interrupt() {
+        this.queue.length = 0;
+        this.player.stop(true);
+        this.suppressCaptureUntil = 0;
+    }
     destroy() {
         if (this.destroyed)
             return;
@@ -222,15 +230,7 @@ class VoiceSession {
     async capture(userId) {
         if (this.destroyed || this.activeRecordings.has(userId))
             return;
-        if (this.captureIsSuppressed()) {
-            this.logger.info("Voice input suppressed during playback guard", {
-                guildId: this.guildId,
-                channelId: this.channelId,
-                userId,
-                remainingMs: this.suppressCaptureUntil - Date.now(),
-            });
-            return;
-        }
+        let duringPlayback = this.captureIsSuppressed();
         // Reserve the user before the network lookup so duplicate speaking-start
         // events cannot subscribe to the same utterance concurrently.
         this.activeRecordings.add(userId);
@@ -239,16 +239,7 @@ class VoiceSession {
             this.activeRecordings.delete(userId);
             return;
         }
-        if (this.captureIsSuppressed()) {
-            this.activeRecordings.delete(userId);
-            this.logger.info("Voice input suppressed during playback guard", {
-                guildId: this.guildId,
-                channelId: this.channelId,
-                userId,
-                remainingMs: this.suppressCaptureUntil - Date.now(),
-            });
-            return;
-        }
+        duringPlayback ||= this.captureIsSuppressed();
         const opusStream = this.connection.receiver.subscribe(userId, {
             end: {
                 behavior: EndBehaviorType.AfterSilence,
@@ -272,16 +263,7 @@ class VoiceSession {
             this.activeRecordings.delete(userId);
             if (discarded || size === 0 || this.destroyed)
                 return;
-            if (this.captureIsSuppressed()) {
-                this.logger.info("Voice utterance discarded during playback guard", {
-                    guildId: this.guildId,
-                    channelId: this.channelId,
-                    userId,
-                    pcmBytes: size,
-                    remainingMs: this.suppressCaptureUntil - Date.now(),
-                });
-                return;
-            }
+            duringPlayback ||= this.captureIsSuppressed();
             const pcm = Buffer.concat(chunks, size);
             const activity = analyzePcm16(pcm);
             const telemetry = {
@@ -321,6 +303,8 @@ class VoiceSession {
                 channelId: this.channelId,
                 userId,
                 pcm,
+                duringPlayback,
+                isCurrent: () => !this.destroyed,
             }).catch((error) => {
                 this.logger.error("Voice utterance processing failed", error);
             });
@@ -328,6 +312,7 @@ class VoiceSession {
         decoder.on("data", (chunk) => {
             if (discarded)
                 return;
+            duringPlayback ||= this.captureIsSuppressed();
             size += chunk.length;
             if (size > maximumBytes) {
                 discarded = true;
@@ -353,7 +338,7 @@ class VoiceSession {
         opusStream.pipe(decoder);
     }
     captureIsSuppressed() {
-        return Date.now() < this.suppressCaptureUntil;
+        return this.player.state.status !== AudioPlayerStatus.Idle || Date.now() < this.suppressCaptureUntil;
     }
 }
 //# sourceMappingURL=voice-manager.js.map

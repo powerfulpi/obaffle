@@ -12,7 +12,12 @@ export class GeminiProvider implements ChatProvider, SpeechRecognizer {
     const response = await this.request(this.chatModel, {
       contents: request.messages.map((message) => ({
         role: message.role === "assistant" ? "model" : "user",
-        parts: [{ text: message.content }],
+        parts: [
+          { text: message.content },
+          ...(message.images ?? []).map((image) => ({
+            inlineData: { mimeType: image.mimeType, data: image.data },
+          })),
+        ],
       })),
       systemInstruction: { parts: [{ text: request.instructions }] },
     });

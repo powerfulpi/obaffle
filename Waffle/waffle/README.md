@@ -27,7 +27,7 @@ The bot runs while this process and machine stay online. It is not deployed auto
 
 | Command | What it does |
 | --- | --- |
-| `/play query` | Queue the first song match or an HTTPS YouTube video link |
+| `/play query` | Queue a song/video, or import an HTTPS YouTube playlist in order |
 | `/search query` | Choose from up to five results in a private dropdown |
 | `/pause` | Toggle pause/resume |
 | `/skip` | Skip, including when track loop is enabled |
@@ -44,9 +44,11 @@ The bot runs while this process and machine stay online. It is not deployed auto
 
 **Sound settings apply at the start of the next track**, including a loop replay. EQ and presets combine; `/effect normal` disables the preset and `/eq` resets EQ. A limiter follows the filters to reduce clipping. Karaoke uses center cancellation and will not cleanly remove vocals from every mix. “8d” is stereo panning, best heard on headphones.
 
+Playback selects yt-dlp's best available audio and encodes stereo Opus at 192 kbps with variable bitrate and maximum encoding quality. The limiter has automatic makeup gain disabled, preserving the requested volume. Source upload quality and the Discord voice connection still affect what listeners hear. For clean playback, use `/effect normal` and `/eq` to reset any effects left on the player.
+
 Users must share the bot's voice channel to modify playback. There is one player per server, with a default 100-song queue cap and 180-second empty-queue timeout. The bot also leaves when all human listeners leave. Queues and settings are in memory and reset after disconnect/restart. Paused tracks remain connected while listeners are present.
 
-Direct links currently mean **YouTube video links** (including Shorts and youtu.be), not arbitrary audio URLs. Playlist-only URLs and live broadcasts are not supported; video links with playlist parameters enqueue just the video. Stream URLs are resolved again at playback time to avoid stale queue entries. Failed tracks are skipped without looping forever.
+Direct links support **YouTube videos and playlists** (including YouTube Music, Shorts, and youtu.be), not arbitrary audio URLs. Use `/play query:https://www.youtube.com/playlist?list=PLAYLIST_ID` to append a playlist in order. Video links containing `list=` also import the playlist from the beginning; remove `list=` to queue only that video. Imports inspect the first `MAX_QUEUE` entries (100 by default), skip entries marked unavailable or live/upcoming, and add as many playable tracks as fit in the remaining queue space. Waffle confirms the number added and reports when additional tracks did not fit. Private or empty playlists return an error. `/search` still offers up to five individual tracks to choose from. Stream URLs are resolved again at playback time to avoid stale queue entries. Failed tracks are skipped without looping forever.
 
 ## Verify
 
@@ -61,6 +63,7 @@ Tests cover dependency checks, input validation, actual FFmpeg rendering of ever
 
 - **YouTube 403 / SABR warning:** update the environment that runs the bot with `.venv/bin/python -m pip install -U 'yt-dlp[default]'`, stop the running bot with Ctrl+C, then restart with `.venv/bin/python -m waffle.bot`. Updating packages does not update an already running process. Waffle logs its Python executable and yt-dlp version at startup and rejects versions older than the project minimum. A bare `python3 -m waffle.bot` may use an older system installation even if the virtual environment is current. The SABR warning alone is not a playback failure; see [yt-dlp's tracking issue](https://github.com/yt-dlp/yt-dlp/issues/12482).
 - **Other YouTube extraction errors:** YouTube sometimes blocks requests from hosting providers or requires sign-in; try another public upload/network. Waffle does not manage cookies or bypass restrictions.
+- **Temporary failures:** Waffle retries extraction once for 403, timeout, connection-reset, and temporary server errors, resolving a fresh stream URL. FFmpeg also reconnects on network errors and HTTP 5xx responses. Sign-in, rate-limit, and unavailable-video errors are reported separately and are not repeatedly retried. A genuine YouTube block can still require attention to the bot's hosting network; audio encoding changes cannot fix that.
 - **Missing JS runtime:** install Deno 2.3+ or Node 22+ on PATH. The bot enables either runtime; the yt-dlp default extra includes its challenge solver. See [yt-dlp's runtime guide](https://github.com/yt-dlp/yt-dlp/wiki/EJS).
 - **Voice connection errors:** check Connect/Speak channel overrides and outgoing UDP/network access. Install `discord.py[voice]` as specified, which includes the voice dependencies; see [discord.py installation](https://discordpy.readthedocs.io/en/stable/intro.html).
 - **No slash commands:** check the applications.commands installation scope, guild ID, and startup logs.

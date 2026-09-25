@@ -6,6 +6,7 @@ export type BotCommand =
   | { name: "leave" }
   | { name: "help" }
   | { name: "status" }
+  | { name: "global-status" }
   | { name: "restart" }
   | { name: "privacy" }
   | { name: "voice"; action: "list" }
@@ -15,7 +16,18 @@ export type BotCommand =
   | { name: "instructions"; action: "show" }
   | { name: "instructions"; action: "reset" }
   | { name: "instructions"; action: "set"; instructions: string }
-  | { name: "memory"; action: "on" | "off" | "status" | "clear" };
+  | { name: "memory"; action: "on" | "off" | "status" | "clear" }
+  | {
+      name: "conversation";
+      action: "on";
+      chancePercent?: number;
+      cooldownSeconds?: number;
+    }
+  | { name: "conversation"; action: "off" }
+  | { name: "conversation"; action: "status" }
+  | { name: "dm-all"; action: "send"; text: string }
+  | { name: "dm-all"; action: "status" }
+  | { name: "dm-all"; action: "cancel" };
 
 export type ParseResult =
   | { kind: "none" }
@@ -24,6 +36,8 @@ export type ParseResult =
 
 const exactCommands: Record<string, BotCommand> = {
   obamastatus: { name: "status" },
+  obamaglobalstatus: { name: "global-status" },
+  obamauniversalstatus: { name: "global-status" },
   obamarestart: { name: "restart" },
   obamahelp: { name: "help" },
   obamaprivacy: { name: "privacy" },
@@ -65,6 +79,11 @@ export function parseCommand(content: string): ParseResult {
       return parseInstructions(trimmed, head, tail);
     case "obamamemory":
       return parseMemory(tail);
+    case "obamaconversation":
+    case "obamaconversationmode":
+      return parseConversation(tail);
+    case "obamadmall":
+      return parseDmAll(prompt);
     default:
       return {
         kind: "error",
@@ -136,17 +155,105 @@ function parseMemory(args: string[]): ParseResult {
   };
 }
 
+function parseConversation(args: string[]): ParseResult {
+  const action = args[0]?.toLowerCase();
+  if ((action === "off" || action === "status") && args.length === 1) {
+    return { kind: "command", command: { name: "conversation", action } };
+  }
+  if (action === "on" && args.length >= 1 && args.length <= 3) {
+    const command: Extract<BotCommand, { name: "conversation"; action: "on" }> = {
+      name: "conversation",
+      action: "on",
+    };
+    const chance = args[1];
+    const cooldown = args[2];
+    if (chance !== undefined) {
+      const value = Number(chance);
+      if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(chance) || value <= 0 || value > 100) {
+        return { kind: "error", message: "Conversation chance must be greater than 0 and at most 100 percent." };
+      }
+      command.chancePercent = value;
+    }
+    if (cooldown !== undefined) {
+      const value = Number(cooldown);
+      if (!/^\d+$/.test(cooldown) || !Number.isSafeInteger(value) || value > 86_400) {
+        return { kind: "error", message: "Conversation cooldown must be a whole number from 0 through 86400 seconds." };
+      }
+      command.cooldownSeconds = value;
+    }
+    return { kind: "command", command };
+  }
+  return {
+    kind: "error",
+    message: "Usage: `ObamaConversation on [chance-percent] [cooldown-seconds]`, `ObamaConversation off`, or `ObamaConversation status`.",
+  };
+}
+
+function parseDmAll(text: string): ParseResult {
+  const action = text.toLowerCase();
+  if (action === "status" || action === "cancel") {
+    return { kind: "command", command: { name: "dm-all", action } };
+  }
+  if (!text) {
+    return {
+      kind: "error",
+      message: "Usage: `ObamaDMAll <message>`, `ObamaDMAll status`, or `ObamaDMAll cancel`.",
+    };
+  }
+  if (text.length > 1_800) {
+    return { kind: "error", message: "DM announcements must be 1800 characters or fewer." };
+  }
+  return { kind: "command", command: { name: "dm-all", action: "send", text } };
+}
+
 export interface WakeMatch {
   woke: boolean;
   prompt: string;
 }
 
+export interface MentionMatch {
+  mentioned: boolean;
+  prompt: string;
+}
+
+/** Matches the bot's own user mention anywhere, retaining all other message text. */
+export function matchBotMention(content: string, botUserId: string): MentionMatch {
+  if (!botUserId) {
+    return { mentioned: false, prompt: "" };
+  }
+  const escapedId = botUserId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const mention = new RegExp(`<@!?${escapedId}>`, "g");
+  return mention.test(content)
+    ? { mentioned: true, prompt: content.replace(mention, "").trim() }
+    : { mentioned: false, prompt: "" };
+}
+
 export function matchWakeWord(transcript: string, wakeWord: string): WakeMatch {
-  const escaped = wakeWord.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = transcript.match(
-    new RegExp(`^\\s*(?:(?:hey|okay|ok)\\s+)?${escaped}\\b[\\s,.:;!?—–-]*(.*)$`, "i"),
+  const name = wakeWord.trim();
+  if (!name) {
+    return { woke: false, prompt: "" };
+  }
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const wordCharacters = "\\p{L}\\p{N}\\p{M}_";
+  const leading = transcript.match(
+    new RegExp(`^\\s*(?:(?:hey|okay|ok)\\s+)?${escaped}(?![${wordCharacters}])[\\s,.:;!?—–-]*(.*)$`, "isu"),
   );
-  return match
-    ? { woke: true, prompt: (match[1] ?? "").trim() }
+  if (leading) {
+    return { woke: true, prompt: (leading[1] ?? "").trim() };
+  }
+
+  // Keep the whole question when the name follows any meaningful speech.
+  const anywhere = new RegExp(`(?:^|[^${wordCharacters}])${escaped}(?![${wordCharacters}])`, "iu");
+  return anywhere.test(transcript)
+    ? { woke: true, prompt: transcript.trim() }
     : { woke: false, prompt: "" };
+}
+
+/** Only an explicit, short wake-name stop request can interrupt playback. */
+export function isVoiceStop(transcript: string, wakeWord: string): boolean {
+  const wake = matchWakeWord(transcript, wakeWord);
+  if (!wake.woke) return false;
+  const escaped = wakeWord.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const prompt = wake.prompt.replace(new RegExp(`(?:[,\\s]+)${escaped}[.!?]*$`, "iu"), "");
+  return /^(?:please\s+)?(?:stop|stop talking|stop speaking|be quiet|cancel)(?:\s+please)?[.!?,]*$/i.test(prompt.trim());
 }

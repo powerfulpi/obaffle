@@ -8,6 +8,7 @@ export declare class SettingsStore {
     constructor(dataDir: string, originalVoiceId: string);
     load(): Promise<void>;
     get(guildId: string): GuildSettings;
+    snapshot(): Record<string, GuildSettings>;
     getSelectedVoiceId(guildId: string): string;
     mutate(guildId: string, mutation: (settings: GuildSettings) => void): Promise<GuildSettings>;
     private save;

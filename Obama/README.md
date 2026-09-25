@@ -7,7 +7,8 @@ The bot is intentionally configured to identify itself as an assistant rather th
 ## Features
 
 - Member-list status shows `ObamaHelp for commands • ObamaJoin for voice` while the bot is online.
-- Voice wake word: say `Obama, <question>` or say `Obama` and ask a follow-up within 12 seconds.
+- Voice wake word: mention `Obama` anywhere in an utterance, or say `Obama` and ask a follow-up within 12 seconds.
+- @mention the bot anywhere in a server message to get a direct text response.
 - `ObamaText <message>` returns a text response.
 - `ObamaSpeak <message>` returns a WAV audio attachment.
 - `ObamaImage <prompt>` generates a PNG image attachment using Gemini or OpenAI.
@@ -19,7 +20,9 @@ The bot is intentionally configured to identify itself as an assistant rather th
 - Persistent non-conversation settings in `data/guild-settings.json`.
 - Console telemetry for captured transcripts, AI prompts/replies, and voice playback.
 - Local duration and loudness filtering before paid speech recognition.
-- Playback feedback suppression and a one-answer-per-server guard to prevent voice loops.
+- Playback feedback suppression with spoken interruption (`Obama, stop`) and a one-answer-per-server guard.
+- Optional voice captions in a text channel configured in code.
+- Mention the bot with an attached image for image understanding; accompanying text is ignored.
 
 ## Requirements
 
@@ -100,6 +103,7 @@ Commands are case-insensitive. Settings-changing commands require the Discord **
 | Command | Result |
 | --- | --- |
 | `ObamaText <message>` | Generate a text-channel response. |
+| `@Obama <message>` | Mention the actual bot anywhere in a server message for a direct text response, regardless of conversation mode. |
 | `ObamaStatus` | Have the AI report live uptime, Discord latency, model, voice session, and memory settings in the server's current personality. Status reports do not read or update conversation memory. |
 | `ObamaSpeak <message>` | Generate a WAV attachment using the selected Cartesia voice. |
 | `ObamaImage <prompt>` | Generate a PNG image from a description. |
@@ -127,11 +131,21 @@ Discord sends encoded audio per speaker. The bot collects one utterance until th
 
 This implementation does not save audio to disk. It discards utterances longer than `MAX_UTTERANCE_SECONDS`. Provider-side retention and processing are controlled by your provider account and terms. Get participant consent before using `ObamaJoin`.
 
-At the default `LOG_LEVEL=info`, the console includes transcribed user speech and generated AI replies. The bot does not write these logs to a file itself, but your terminal, process manager, or hosting provider may retain console output. Treat it as sensitive conversation data. Audio capture is ignored while the bot is playing a response and for `VOICE_FEEDBACK_COOLDOWN_MS` afterward (1.5 seconds by default) to prevent speaker-to-microphone feedback loops.
+At the default `LOG_LEVEL=info`, the console includes transcribed user speech and generated AI replies. The bot does not write these logs to a file itself, but your terminal, process manager, or hosting provider may retain console output. Treat it as sensitive conversation data. Audio is captured and transcribed during playback and for `VOICE_FEEDBACK_COOLDOWN_MS` afterward (1.5 seconds by default), but only explicit stop requests are accepted during that period. Ordinary triggers are ignored to prevent speaker-to-microphone feedback loops. This means interruption support also makes STT calls for speech during playback.
 
 Before calling the speech-recognition API, the bot discards audio shorter than `VOICE_MIN_UTTERANCE_MS` (350 ms by default) or quieter than `VOICE_MIN_RMS_DBFS` (-42 dBFS by default). Discarded segments and their measured duration/RMS level appear in the console. To make recognition less sensitive, raise the RMS threshold toward zero (for example, `VOICE_MIN_RMS_DBFS=-36`) or increase the duration (for example, `VOICE_MIN_UTTERANCE_MS=500`). To admit quieter speech, lower the RMS threshold toward `-50`. Restart the bot after changing `.env`.
 
-Wake matching is anchored to the beginning of a transcript. `Obama, ...`, `Hey Obama, ...`, `Okay Obama, ...`, and a standalone `Obama` are accepted; an incidental mention later in a sentence is ignored.
+Wake matching recognizes the whole name anywhere in a transcript, case-insensitively.
+`Obama, tell me a joke`, `What do you think, Obama, about pizza?`, and
+`Tell me a joke, Obama` all trigger a voice response. When the name comes later,
+the full utterance is retained as the question. Words such as `Obamacare` do not
+trigger it. Saying only `Obama` still opens the existing 12-second follow-up window.
+
+In server text channels, select the bot in Discord's @mention picker anywhere in
+your message to get a direct reply. This uses the current personality and text
+memory settings, without conversation mode's random chance or cooldown. A bare
+mention gets a short greeting. Explicit Obama commands retain their normal behavior
+and produce only one response. Messages from bots and webhooks are ignored.
 
 Voice joins log each safe connection and networking state without exposing Discord voice tokens. `VOICE_JOIN_TIMEOUT_MS` controls how long a join may take and defaults to 30,000 milliseconds. If a join ends at `signalling`, check Discord channel permissions; if it ends during `UdpHandshaking`, check VPN, firewall, and network UDP access.
 
@@ -200,8 +214,11 @@ See [Google's image generation guide](https://ai.google.dev/gemini-api/docs/gene
 To use OpenAI instead, set `IMAGE_PROVIDER=openai` and `OPENAI_API_KEY`.
 `OPENAI_IMAGE_MODEL` defaults to `gpt-image-2`. Image provider selection is independent
 of `AI_PROVIDER` and `STT_PROVIDER`.
-The command sends the description directly, without conversation memory or chat
-instructions. Images stay in memory until uploaded to Discord. One image request
+The default uses Gemini 3.1 Flash Image. The command wraps the
+description in an explicit image-generation instruction and requests image-only
+output, without conversation memory. Ordinary text-only completions are retried
+once; explicit provider blocks are reported without retrying.
+Images stay in memory until uploaded to Discord. One image request
 runs per server at a time, with a three-minute timeout and a 10 MB attachment limit.
 Restart the bot after changing environment variables. Automated image tests mock
 the API and do not make paid requests.
@@ -218,3 +235,63 @@ Stop and relaunch an already-running bot once after installing this change.
 Directly running `node dist/src/index.js` leaves the restart command unavailable.
 Production restarts use the compiled build; run `npm run build` to include source
 changes. Development restarts rebuild automatically.
+
+## Interruptible speech and live captions
+
+Say **“Obama, stop”**, “Obama, stop talking”, or “Obama, be quiet” while the bot
+is speaking. Once the utterance is transcribed, playback stops and queued audio
+is cleared. Replies still being generated or synthesized are discarded before
+playback; an already-started provider request may still finish and incur charges.
+You can ask a follow-up without the wake name within the configured 12-second
+window. Ordinary speech during playback does not interrupt the bot. Interruption
+latency depends on the silence threshold and speech-recognition response time.
+
+Set `LIVE_CAPTIONS_GUILD_ID` and `LIVE_CAPTIONS_CHANNEL_ID` at the top of
+`src/live-captions.ts` to the destination Discord server and text channel IDs.
+Captions from **all servers** go to that one channel, labeled with the source
+server ID and voice channel. Leaving either ID empty disables captions. Rebuild
+and restart for a code change to take effect. The channel must belong to the
+configured destination server, and the bot must be in that server with View
+Channel and Send Messages permissions.
+
+Captions show accepted voice questions after transcription and the complete reply
+when audio is queued, plus a notice when speech is interrupted. These are
+utterance-level captions, not word-by-word streaming subtitles. Background chatter
+is not captioned. Captions are normal Discord messages visible to everyone with
+access to that text channel and remain there until deleted, even though the bot's
+conversation memory is RAM-only. Caption delivery failures are logged and do not
+block speech. Mentions in captions do not ping anyone.
+
+## Image understanding
+
+**@mention the bot and attach an image.** It describes the image, explains a meme,
+or discusses what is visible in a screenshot using the current personality.
+Any text accompanying the attachment is ignored, including command text.
+Image mentions take priority over explicit commands and ambient conversation mode.
+
+This uses the configured **chat provider/model**, independently of image generation.
+The chat model must support image inputs. Supported uploads are PNG, JPEG, and WebP,
+up to three images per message and 5 MB per image. Non-image attachments do not
+activate this feature; unsupported image formats get a helpful error.
+Only uploaded Discord attachments are downloaded, and images stay in memory while
+being sent to the provider. Image requests do not read or update conversation memory.
+
+Provider request formats follow the official
+[OpenAI image-input documentation](https://developers.openai.com/api/docs/guides/images-vision)
+and [Gemini image-understanding documentation](https://ai.google.dev/gemini-api/docs/image-understanding).
+
+## Global configuration status
+
+Run `ObamaGlobalStatus` (alias `ObamaUniversalStatus`) for a complete text attachment
+covering every current server and any additional servers with saved settings.
+Only the Discord bot application owner, or the owner of its owning team, can run
+this command. Server Administrator alone does not grant access. The report is
+posted in the channel where the command is run.
+
+The report includes full custom instructions, shared default instructions, enabled
+conversation channels with chance/cooldown settings, all voice aliases and IDs,
+the selected voice, memory preferences, live voice connection state, model/provider
+choices, uptime, and the global captions destination. Saved settings for servers
+or channels no longer available are labeled accordingly. It does not include API
+keys, tokens, or conversation history, and makes no AI requests. `ObamaStatus`
+continues to provide the existing personality-based status reply.
