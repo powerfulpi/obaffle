@@ -1,0 +1,8 @@
+discord.py[voice]<3,>=2.7
+yt-dlp[default]>=2026.8.19
+python-dotenv<2,>=1
+
+[dev]
+pytest>=8
+pytest-asyncio>=0.24
+ruff>=0.9

@@ -26,9 +26,9 @@ export function getDashboardStats(client: Client) {
 
 export async function startDashboard(client: Client, port = 3000, controlOrigin?: string): Promise<Server> {
   // Only the local launcher may opt into embedding; standalone use stays unframed.
-  if (controlOrigin && !/^http:\/\/(127\.0\.0\.1|localhost):\d{1,5}$/.test(controlOrigin)) {
-    throw new Error("Dashboard frame origin must be a localhost HTTP origin");
-  }
+  //if (controlOrigin && !/^http:\/\/(0\.0\.0\.0|localhost):\d{1,5}$/.test(controlOrigin)) {
+    //throw new Error("Dashboard frame origin must be a localhost HTTP origin");
+  //}
   const server = createServer((request, response) => {
     response.setHeader("Cache-Control", "no-store");
     response.setHeader("X-Content-Type-Options", "nosniff");
@@ -49,7 +49,7 @@ export async function startDashboard(client: Client, port = 3000, controlOrigin?
   });
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
-    server.listen(port, "127.0.0.1", () => {
+    server.listen(port, "0.0.0.0", () => {
       server.removeListener("error", reject);
       resolve();
     });

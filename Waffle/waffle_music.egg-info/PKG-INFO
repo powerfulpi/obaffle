@@ -1,0 +1,12 @@
+Metadata-Version: 2.4
+Name: waffle-music
+Version: 0.1.0
+Summary: Discord music, queues, and playful audio effects
+Requires-Python: >=3.11
+Requires-Dist: discord.py[voice]<3,>=2.7
+Requires-Dist: yt-dlp[default]>=2026.8.19
+Requires-Dist: python-dotenv<2,>=1
+Provides-Extra: dev
+Requires-Dist: pytest>=8; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.24; extra == "dev"
+Requires-Dist: ruff>=0.9; extra == "dev"

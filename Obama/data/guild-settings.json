@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "guilds": {
+    "849825141617983550": {
+      "selectedVoice": "original",
+      "voices": {
+        "original": "b1cd49bf-72a7-4b69-875d-e02b300fbbf1",
+        "matthew": "fd89f719-cf68-4d92-98c3-dba6541f1519",
+        "caz": "c830fdd8-e140-4853-af96-d0eb6b3c978c",
+        "aidengay": "aabac266-a870-474c-af63-50195ccf07b3",
+        "restart": "e28bf148-ce87-4e25-9c9f-0dcda33bf774"
+      },
+      "instructions": null,
+      "memoryEnabled": true
+    },
+    "1352826765906808862": {
+      "selectedVoice": "original",
+      "voices": {
+        "original": "b1cd49bf-72a7-4b69-875d-e02b300fbbf1"
+      },
+      "instructions": null,
+      "memoryEnabled": true
+    }
+  }
+}

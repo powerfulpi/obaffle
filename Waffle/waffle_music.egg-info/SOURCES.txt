@@ -1,0 +1,14 @@
+pyproject.toml
+tests/test_audio.py
+tests/test_bot.py
+tests/test_player.py
+waffle/__init__.py
+waffle/audio.py
+waffle/bot.py
+waffle/player.py
+waffle_music.egg-info/PKG-INFO
+waffle_music.egg-info/SOURCES.txt
+waffle_music.egg-info/dependency_links.txt
+waffle_music.egg-info/entry_points.txt
+waffle_music.egg-info/requires.txt
+waffle_music.egg-info/top_level.txt
