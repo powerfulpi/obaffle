@@ -38,6 +38,7 @@ const HELP = [
   "`ObamaConversation on [chance %] [cooldown seconds]` — join this channel's chats (Manage Server; default 5%, 60s)",
   "`ObamaConversation off|status` — disable or inspect this channel's mode",
   "`ObamaDMAll <message>` — DM human server members (server owner)",
+  "`ObamaDM <@person or user ID> <message>` — DM one server member (server owner)",
   "`ObamaDMAll status|cancel` — inspect or stop the DM send (server owner)",
   "`ObamaJoin` / `ObamaLeave` — join or leave your voice channel",
   "",
@@ -217,6 +218,34 @@ export class ObamaBot {
     }
     if (command.name === "conversation") {
       await this.handleConversationCommand(message, command);
+      return;
+    }
+    if (command.name === "dm") {
+      if (member.id !== guild.ownerId) {
+        await message.reply("Only the **server owner** can send DMs through the bot.");
+        return;
+      }
+      let recipient;
+      try {
+        recipient = await guild.members.fetch(command.userId);
+      } catch {
+        await message.reply("I could not find that person in this server. Check their mention or user ID and try again.");
+        return;
+      }
+      if (recipient.user.bot) {
+        await message.reply("Please choose a person, not a bot.");
+        return;
+      }
+      try {
+        await recipient.send({ content: command.text, allowedMentions: { parse: [] } });
+      } catch {
+        await message.reply("I could not deliver that DM. The recipient may have DMs disabled or may have blocked the bot.");
+        return;
+      }
+      await message.reply({
+        content: `DM sent to <@${recipient.id}>.`,
+        allowedMentions: { parse: [], repliedUser: false },
+      });
       return;
     }
     if (command.name === "dm-all") {

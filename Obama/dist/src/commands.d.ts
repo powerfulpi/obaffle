@@ -1,4 +1,8 @@
 export type BotCommand = {
+    name: "dm";
+    userId: string;
+    text: string;
+} | {
     name: "text";
     prompt: string;
 } | {

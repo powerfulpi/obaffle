@@ -45,6 +45,8 @@ export function parseCommand(content) {
             return parseConversation(tail);
         case "obamadmall":
             return parseDmAll(prompt);
+        case "obamadm":
+            return parseDm(prompt);
         default:
             return {
                 kind: "error",
@@ -140,6 +142,17 @@ function parseConversation(args) {
         kind: "error",
         message: "Usage: `ObamaConversation on [chance-percent] [cooldown-seconds]`, `ObamaConversation off`, or `ObamaConversation status`.",
     };
+}
+function parseDm(prompt) {
+    const match = /^(?:<@!?(\d{17,20})>|(\d{17,20}))\s+([\s\S]+)$/.exec(prompt);
+    const text = match?.[3]?.trim();
+    if (!match || !text) {
+        return { kind: "error", message: "Usage: `ObamaDM <@person or user ID> <message>`" };
+    }
+    if (text.length > 2_000) {
+        return { kind: "error", message: "DM messages must be 2000 characters or fewer." };
+    }
+    return { kind: "command", command: { name: "dm", userId: (match[1] ?? match[2]), text } };
 }
 function parseDmAll(text) {
     const action = text.toLowerCase();

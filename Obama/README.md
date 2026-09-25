@@ -102,6 +102,7 @@ Commands are case-insensitive. Settings-changing commands require the Discord **
 
 | Command | Result |
 | --- | --- |
+| `ObamaDM <@person or user ID> <message>` | Send a DM from the bot to one human member of this server (server owner only). Supports up to 2,000 characters; does not require enabling member-list DMs. Example: `ObamaDM @Alex Hello there!` |
 | `ObamaText <message>` | Generate a text-channel response. |
 | `@Obama <message>` | Mention the actual bot anywhere in a server message for a direct text response, regardless of conversation mode. |
 | `ObamaStatus` | Have the AI report live uptime, Discord latency, model, voice session, and memory settings in the server's current personality. Status reports do not read or update conversation memory. |
