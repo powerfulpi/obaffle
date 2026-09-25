@@ -258,3 +258,7 @@ profile_default/
 .spyproject
 
 site/
+
+
+sshkey
+sshkey.pub
