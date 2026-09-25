@@ -3218,3 +3218,5 @@ Waffle/waffle/__pycache__/bot.cpython-314.pyc
 Waffle/waffle/__pycache__/player.cpython-314.pyc
 Waffle/.env
 Obama/.env
+/sshkey
+/sshkey.pub
