@@ -1,4 +1,5 @@
-import { decodeImage } from "./openai-image-generator.js";
+import type { ChatImage } from "../types.js";
+import { decodeImage, recreationPrompt } from "./openai-image-generator.js";
 
 export class GeminiImageGenerator {
   public constructor(
@@ -7,18 +8,18 @@ export class GeminiImageGenerator {
     private readonly request: typeof fetch = fetch,
   ) {}
 
-  public async generate(prompt: string): Promise<Buffer> {
-    return this.generateAttempt(prompt, AbortSignal.timeout(180_000), true);
+  public async generate(prompt: string, reference?: ChatImage): Promise<Buffer> {
+    return this.generateAttempt(prompt, AbortSignal.timeout(180_000), true, reference);
   }
 
-  private async generateAttempt(prompt: string, signal: AbortSignal, retry: boolean): Promise<Buffer> {
+  private async generateAttempt(prompt: string, signal: AbortSignal, retry: boolean, reference?: ChatImage): Promise<Buffer> {
     const response = await this.request(
       `https://generativelanguage.googleapis.com/v1/models/${encodeURIComponent(this.model)}:generateContent`,
       {
         method: "POST",
         headers: { "x-goog-api-key": this.apiKey, "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: `Generate one image depicting the following description. If details are unspecified, choose them creatively.\n\n${prompt}` }] }],
+          contents: [{ parts: [...(reference ? [{ inlineData: reference }] : []), { text: reference ? recreationPrompt(prompt) : `Generate one image depicting the following description. If details are unspecified, choose them creatively.\n\n${prompt}` }] }],
           generationConfig: { responseModalities: ["IMAGE"] },
         }),
         signal,
@@ -43,7 +44,7 @@ export class GeminiImageGenerator {
       if (retry && !body?.promptFeedback?.blockReason && candidates.length > 0
         && candidates.every((candidate) => candidate.finishReason === "STOP")
         && parts.some((part) => !part.thought && part.text)) {
-        return this.generateAttempt(prompt, signal, false);
+        return this.generateAttempt(prompt, signal, false, reference);
       }
       const reasons = candidates.map((candidate) => candidate.finishReason).filter(Boolean).join(", ");
       const text = parts.filter((part) => !part.thought).map((part) => part.text ?? "").join(" ").slice(0, 300);

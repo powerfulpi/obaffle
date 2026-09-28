@@ -8,8 +8,24 @@ const exactCommands = {
     obamajoin: { name: "join" },
     obamaleave: { name: "leave" },
 };
-export function parseCommand(content) {
-    const trimmed = content.trim();
+// Common commands keep the first letter; collisions try the second letter,
+// then two letters when that letter is already reserved (e.g. Text vs Status).
+export const COMMAND_SHORTCUTS = Object.freeze({
+    ot: "obamatext", os: "obamaspeak", oim: "obamaimage",
+    oi: "obamainstructions", ost: "obamastatus", og: "obamaglobalstatus",
+    or: "obamarestart", ohe: "obamahelp", op: "obamaprivacy",
+    oj: "obamajoin", ol: "obamaleave", ov: "obamavoice",
+    om: "obamamemory", oc: "obamaconversation", odm: "obamadm",
+    oda: "obamadmall", osh: "obamashortcuts",
+});
+export const SHORTCUT_HELP = Object.entries(COMMAND_SHORTCUTS)
+    .map(([alias, command]) => `${alias.toUpperCase()}=${command.slice(5)}`).join(", ");
+export function parseCommand(content, shortcutsEnabled = false) {
+    let trimmed = content.trim();
+    const first = trimmed.split(/\s+/, 1)[0] ?? "";
+    if (shortcutsEnabled && Object.hasOwn(COMMAND_SHORTCUTS, first.toLowerCase())) {
+        trimmed = COMMAND_SHORTCUTS[first.toLowerCase()] + trimmed.slice(first.length);
+    }
     if (!trimmed.toLowerCase().startsWith("obama")) {
         return { kind: "none" };
     }
@@ -26,7 +42,17 @@ export function parseCommand(content) {
             return prompt
                 ? { kind: "command", command: { name: "text", prompt } }
                 : { kind: "error", message: "Usage: `ObamaText <message>`" };
+        case "obamashortcuts": {
+            const action = (tail[0] ?? "toggle").toLowerCase();
+            if (tail.length <= 1 && (action === "toggle" || action === "on" || action === "off" || action === "status")) {
+                return { kind: "command", command: { name: "shortcuts", action } };
+            }
+            return { kind: "error", message: "Usage: `ObamaShortcuts [on|off|status|toggle]`" };
+        }
         case "obamaimage":
+            if (/^recreate(?:\s|$)/i.test(prompt)) {
+                return { kind: "command", command: { name: "image", recreate: true, prompt: prompt.slice(10).trim() } };
+            }
             return prompt
                 ? { kind: "command", command: { name: "image", prompt } }
                 : { kind: "error", message: "Usage: `ObamaImage <prompt>`" };

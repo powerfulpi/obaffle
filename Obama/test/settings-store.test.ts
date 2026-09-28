@@ -31,6 +31,7 @@ describe("SettingsStore conversation configuration", () => {
     await store.load();
     assert.deepEqual(store.get("guild"), {
       ...legacySettings,
+      shortcutsEnabled: false,
       voices: { original: "current-default", narrator: "narrator-id" },
       conversationChannels: {},
     });
@@ -41,6 +42,7 @@ describe("SettingsStore conversation configuration", () => {
     await reloaded.load();
     assert.deepEqual(reloaded.get("guild"), {
       ...legacySettings,
+      shortcutsEnabled: false,
       voices: { original: "current-default", narrator: "narrator-id" },
       conversationChannels: { channel: { chancePercent: 2.5, cooldownSeconds: 90 } },
     });

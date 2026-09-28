@@ -1,4 +1,4 @@
-import { decodeImage } from "./openai-image-generator.js";
+import { decodeImage, recreationPrompt } from "./openai-image-generator.js";
 export class GeminiImageGenerator {
     apiKey;
     model;
@@ -8,15 +8,15 @@ export class GeminiImageGenerator {
         this.model = model;
         this.request = request;
     }
-    async generate(prompt) {
-        return this.generateAttempt(prompt, AbortSignal.timeout(180_000), true);
+    async generate(prompt, reference) {
+        return this.generateAttempt(prompt, AbortSignal.timeout(180_000), true, reference);
     }
-    async generateAttempt(prompt, signal, retry) {
+    async generateAttempt(prompt, signal, retry, reference) {
         const response = await this.request(`https://generativelanguage.googleapis.com/v1/models/${encodeURIComponent(this.model)}:generateContent`, {
             method: "POST",
             headers: { "x-goog-api-key": this.apiKey, "Content-Type": "application/json" },
             body: JSON.stringify({
-                contents: [{ parts: [{ text: `Generate one image depicting the following description. If details are unspecified, choose them creatively.\n\n${prompt}` }] }],
+                contents: [{ parts: [...(reference ? [{ inlineData: reference }] : []), { text: reference ? recreationPrompt(prompt) : `Generate one image depicting the following description. If details are unspecified, choose them creatively.\n\n${prompt}` }] }],
                 generationConfig: { responseModalities: ["IMAGE"] },
             }),
             signal,
@@ -33,7 +33,7 @@ export class GeminiImageGenerator {
             if (retry && !body?.promptFeedback?.blockReason && candidates.length > 0
                 && candidates.every((candidate) => candidate.finishReason === "STOP")
                 && parts.some((part) => !part.thought && part.text)) {
-                return this.generateAttempt(prompt, signal, false);
+                return this.generateAttempt(prompt, signal, false, reference);
             }
             const reasons = candidates.map((candidate) => candidate.finishReason).filter(Boolean).join(", ");
             const text = parts.filter((part) => !part.thought).map((part) => part.text ?? "").join(" ").slice(0, 300);

@@ -28,6 +28,7 @@ export interface GuildSettings {
     voices: Record<string, string>;
     instructions: string | null;
     memoryEnabled: boolean;
+    shortcutsEnabled: boolean;
     conversationChannels: Record<string, ConversationChannelSettings>;
 }
 export interface PersistedSettings {

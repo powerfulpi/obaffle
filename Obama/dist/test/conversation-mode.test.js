@@ -285,4 +285,40 @@ it("uses guild personality and transcript as data without reading or modifying s
     assert.match(requests[1].instructions, /^Default personality/);
     assert.equal(memoryReads, 0);
 });
+it("reads recent images with transcript attribution and includes Discord embed context", async (t) => {
+    const h = harness();
+    const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+    const downloads = [];
+    t.mock.method(globalThis, "fetch", async (url) => { downloads.push(String(url)); return new Response(png); });
+    const attached = (name) => new Map([[name, { name, size: png.length, contentType: "image/png", url: `https://cdn.discordapp.com/attachments/a/b/${name}` }]]);
+    h.state.history = [message("97", "channel", { attachments: attached("old.png") }), message("98", "channel", { attachments: attached("middle.png") }), message("99", "channel", { attachments: attached("recent.png") })];
+    await h.service.handleMessage(h.trigger("100", {
+        content: "What do you think? https://example.com/story",
+        attachments: attached("trigger.png"),
+        embeds: [{ title: "Article preview", description: "A story about cats", url: "https://example.com/story" }],
+    }));
+    assert.deepEqual(downloads.map((url) => url.split("/").at(-1)), ["trigger.png", "recent.png", "middle.png"]);
+    const request = h.requests[0];
+    assert.equal(request.images?.length, 3);
+    const entries = JSON.parse(request.prompt);
+    assert.deepEqual(entries[0].imageReferences, []);
+    assert.deepEqual(entries[3].imageReferences, [{ attachment: "trigger.png", image: 1 }]);
+    assert.equal(entries[3].embeds[0].title, "Article preview");
+    assert.match(request.linkTexts[0], /example.com\/story/);
+});
+it("does not download media for losing rolls and tolerates a broken attachment", async (t) => {
+    const h = harness();
+    let downloads = 0;
+    t.mock.method(globalThis, "fetch", async () => { downloads++; throw new Error("Image unavailable"); });
+    const trigger = h.trigger("100", { content: "", attachments: new Map([["a", { name: "a.png", size: 10, url: "https://cdn.discordapp.com/attachments/a/b/a.png" }]]) });
+    h.state.random = 0.9;
+    await h.service.handleMessage(trigger);
+    assert.equal(downloads, 0);
+    h.state.random = 0;
+    await h.service.handleMessage(trigger);
+    assert.equal(downloads, 1);
+    assert.equal(h.requests.length, 1);
+    assert.equal(h.requests[0].images, undefined);
+    assert.equal(h.sent.length, 1);
+});
 //# sourceMappingURL=conversation-mode.test.js.map

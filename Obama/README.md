@@ -22,7 +22,7 @@ The bot is intentionally configured to identify itself as an assistant rather th
 - Local duration and loudness filtering before paid speech recognition.
 - Playback feedback suppression with spoken interruption (`Obama, stop`) and a one-answer-per-server guard.
 - Optional voice captions in a text channel configured in code.
-- Mention the bot with an attached image for image understanding; accompanying text is ignored.
+- Mention the bot with an attached image to ask about it; accompanying questions and links are included.
 
 ## Requirements
 
@@ -107,7 +107,9 @@ Commands are case-insensitive. Settings-changing commands require the Discord **
 | `@Obama <message>` | Mention the actual bot anywhere in a server message for a direct text response, regardless of conversation mode. |
 | `ObamaStatus` | Have the AI report live uptime, Discord latency, model, voice session, and memory settings in the server's current personality. Status reports do not read or update conversation memory. |
 | `ObamaSpeak <message>` | Generate a WAV attachment using the selected Cartesia voice. |
-| `ObamaImage <prompt>` | Generate a PNG image from a description. |
+| `ObamaImage <prompt>` | Generate an image from a description. |
+| `ObamaImage --recreate [instructions]` | Recreate one attached PNG, JPEG, or WebP image (up to 5 MB). |
+| `ObamaShortcuts [on\|off\|status\|toggle]` | Toggle or inspect server command shortcuts; Manage Server to change. |
 | `ObamaJoin` | Join the caller's current voice channel. |
 | `ObamaLeave` | Leave the server's voice channel. |
 | `ObamaRestart` | Restart the entire bot (Administrator or server owner only). |
@@ -199,9 +201,52 @@ The dashboard runs with the bot: an already-open page shows “Unreachable” wh
 the process stops, and reconnects automatically when it returns. Restart an
 already-running bot once after installing this update to enable the dashboard.
 
+## Command shortcuts
+
+`ObamaShortcuts` toggles shortcuts for this server; `on` and `off` explicitly set
+it, and `status` shows the setting and alias list. Changing it requires Manage
+Server. The setting defaults to off and survives restarts. Full commands always
+work. Shortcuts are case-insensitive and must be the first complete word.
+
+| Shortcut | Command |
+| --- | --- |
+| OT | ObamaText |
+| OS | ObamaSpeak |
+| OI | ObamaImage |
+| ON | ObamaInstructions |
+| OST | ObamaStatus |
+| OG | ObamaGlobalStatus |
+| OR | ObamaRestart |
+| OH | ObamaHelp |
+| OP | ObamaPrivacy |
+| OJ | ObamaJoin |
+| OL | ObamaLeave |
+| OV | ObamaVoice |
+| OM | ObamaMemory |
+| OC | ObamaConversation |
+| OD | ObamaDM |
+| ODM | ObamaDMAll |
+| OSH | ObamaShortcuts |
+
+Common commands keep the first letter. Conflicts use the second letter (for
+example, Instructions becomes ON); if that is also taken, use the first two
+letters (Status becomes OST because OT is Text). Arguments and permissions
+are the same as for full commands: `OT hello`, `OV list`, `OI --recreate`.
+
 ## Image generation
 
 Use `ObamaImage a watercolor cat sitting on the moon` in a text channel.
+To recreate an image, attach exactly one PNG, JPEG, or WebP (up to 5 MB) to
+`ObamaImage --recreate`. You can add optional instructions, for example
+`ObamaImage --recreate keep every detail but use watercolor`. The original image
+is sent directly to the selected image model with instructions to preserve its
+composition, subjects, colors, style, and text as closely as possible; results
+are AI recreations and may differ from the original. Supports Gemini image models
+and OpenAI models that support image edits.
+
+Provider request formats: [OpenAI image generation and editing](https://developers.openai.com/api/docs/guides/image-generation)
+and [Gemini image generation](https://ai.google.dev/gemini-api/docs/image-generation).
+
 Image generation defaults to Gemini. Configure:
 
 ```dotenv
@@ -267,15 +312,15 @@ block speech. Mentions in captions do not ping anyone.
 
 **@mention the bot and attach an image.** It describes the image, explains a meme,
 or discusses what is visible in a screenshot using the current personality.
-Any text accompanying the attachment is ignored, including command text.
-Image mentions take priority over explicit commands and ambient conversation mode.
+Accompanying text is used as your question, including any links to compare with the image.
+Explicit commands keep their behavior; otherwise image mentions take priority over ambient conversation mode.
 
 This uses the configured **chat provider/model**, independently of image generation.
 The chat model must support image inputs. Supported uploads are PNG, JPEG, and WebP,
 up to three images per message and 5 MB per image. Non-image attachments do not
 activate this feature; unsupported image formats get a helpful error.
-Only uploaded Discord attachments are downloaded, and images stay in memory while
-being sent to the provider. Image requests do not read or update conversation memory.
+Uploaded Discord attachments are validated before downloading, and images stay in memory while
+being sent to the provider. Public direct image links can also be inspected as described below. Image requests do not read or update conversation memory.
 
 Provider request formats follow the official
 [OpenAI image-input documentation](https://developers.openai.com/api/docs/guides/images-vision)
@@ -296,3 +341,34 @@ choices, uptime, and the global captions destination. Saved settings for servers
 or channels no longer available are labeled accordingly. It does not include API
 keys, tokens, or conversation history, and makes no AI requests. `ObamaStatus`
 continues to provide the existing personality-based status reply.
+
+## Images and links in conversation
+
+When `ObamaConversation` is on, a selected response considers images from the same
+15-message transcript, prioritizing the triggering message and newest history.
+It attempts up to three image attachments (PNG, JPEG, or WebP; 5 MB each), labels
+which message each image belongs to, and includes Discord embed titles and
+descriptions. Failed downloads and other files remain unopened placeholders.
+The usual chance, cooldown, and channel permissions still apply; a losing random
+roll does not download images or links.
+
+Public `http://` and `https://` links are read automatically for conversational
+responses: `ObamaText`, `ObamaSpeak`, direct mentions, image questions, conversation
+mode, and URLs present in voice transcripts. No separate command is required.
+For example: `ObamaText what is this about? https://example.com/article`.
+Follow-up questions can reuse links in enabled conversation memory.
+
+Each reply reads at most three distinct links, prioritizing the current message.
+It extracts titles, descriptions, and readable HTML/plain-text/JSON content, or
+passes a direct PNG/JPEG/WebP image to the chat model (up to three images total).
+Page excerpts are capped at 8,000 characters; downloads have a 10-second deadline,
+three-redirect limit, and a 512 KB page / 5 MB image limit. Only public network
+addresses and standard web ports are allowed, including after redirects.
+
+This is a page reader, not a logged-in browser: JavaScript-only pages, login/paywall
+content, PDFs, audio, and video may be unavailable. Discord embeds can provide a
+partial preview when the full page is unavailable. The bot is instructed to
+acknowledge unavailable content rather than invent it, and to treat fetched content
+as source material rather than instructions. Fetched page text and image bytes are
+not stored in conversation memory. A chat model with image input is needed to see
+images. No additional API key is required for fetching public pages.

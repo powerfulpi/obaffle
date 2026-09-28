@@ -11,6 +11,10 @@ export type BotCommand = {
 } | {
     name: "image";
     prompt: string;
+    recreate?: boolean;
+} | {
+    name: "shortcuts";
+    action: "toggle" | "on" | "off" | "status";
 } | {
     name: "join";
 } | {
@@ -84,7 +88,9 @@ export type ParseResult = {
     kind: "command";
     command: BotCommand;
 };
-export declare function parseCommand(content: string): ParseResult;
+export declare const COMMAND_SHORTCUTS: Readonly<Record<string, string>>;
+export declare const SHORTCUT_HELP: string;
+export declare function parseCommand(content: string, shortcutsEnabled?: boolean): ParseResult;
 export interface WakeMatch {
     woke: boolean;
     prompt: string;

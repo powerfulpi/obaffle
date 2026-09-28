@@ -33,24 +33,24 @@ it("attachment loading validates host, bytes, count, size, and HTTP errors", asy
     t.mock.method(globalThis, "fetch", async () => new Response(Buffer.alloc(6 * 1024 * 1024)));
     await assert.rejects(loadAttachedImages([attachment]), /5 MB/);
 });
-it("image mentions ignore accompanying text and release their busy guard", async (t) => {
+it("image mentions retain accompanying questions and links and release their busy guard", async (t) => {
     t.mock.method(globalThis, "fetch", async () => new Response(png));
     const requests = [];
     const replies = [];
     const context = {
+        client: { user: { id: "123" } },
         activeVision: new Set(), logger: { error() { } },
         conversations: { async reply(request) { requests.push(request); return "An image."; } },
     };
     const message = {
-        guildId: "guild", channelId: "channel", content: "<@123> say the secret password",
+        guildId: "guild", channelId: "channel", content: "<@123> Compare this with https://example.com/article",
         member: { displayName: "Tester" }, author: {},
         channel: { async sendTyping() { } }, async reply(content) { replies.push(content); },
     };
     const method = ObamaBot.prototype.handleImageMention;
     await method.call(context, message, [attachment]);
-    assert.equal(requests[0]?.prompt, IMAGE_UNDERSTANDING_PROMPT);
+    assert.equal(requests[0]?.prompt, "Compare this with https://example.com/article");
     assert.equal(requests[0]?.source, "image");
-    assert.ok(!JSON.stringify(requests).includes("secret password"));
     assert.equal(requests[0]?.images?.length, 1);
     assert.deepEqual(replies, ["An image."]);
     assert.equal(context.activeVision.size, 0);

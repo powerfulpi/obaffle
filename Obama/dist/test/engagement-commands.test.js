@@ -48,6 +48,7 @@ it("requests the privileged member intent only when explicitly enabled", async (
 it("routes only ordinary human guild messages to conversation mode", async () => {
     const events = [];
     const context = {
+        settings: { get: () => ({ shortcutsEnabled: false }) },
         client: { user: { id: "12345" } },
         conversationMode: { async handleMessage() { events.push("ambient"); } },
         async executeCommand() { events.push("command"); },

@@ -10,7 +10,7 @@ import {
 
 import { pcmStereoToWav } from "./audio.js";
 import { CartesiaTts } from "./cartesia.js";
-import { parseCommand, matchBotMention, matchWakeWord, isVoiceStop, type BotCommand } from "./commands.js";
+import { SHORTCUT_HELP, parseCommand, matchBotMention, matchWakeWord, isVoiceStop, type BotCommand } from "./commands.js";
 import type { AppConfig } from "./config.js";
 import { ConversationService } from "./conversation-service.js";
 import { ConversationModeService } from "./conversation-mode.js";
@@ -30,11 +30,13 @@ const HELP = [
   "**Conversation**",
   "`ObamaText <message>` — reply with text",
   "@mention this bot anywhere in a message — reply with text",
-  "@mention with an attached image — explain the image (accompanying text is ignored)",
+  "@mention with an attached image — answer about the image and accompanying text",
   "`ObamaStatus` — report live bot status in the current personality",
   "`ObamaGlobalStatus` — all-server configuration report (bot application owner)",
   "`ObamaSpeak <message>` — reply with a WAV audio attachment",
   "`ObamaImage <prompt>` — generate an image attachment",
+  "`ObamaImage --recreate [instructions]` — recreate one attached image (PNG/JPEG/WebP, up to 5 MB)",
+  "`ObamaShortcuts [on|off|status]` — toggle/inspect server shortcuts (Manage Server to change)",
   "`ObamaConversation on [chance %] [cooldown seconds]` — join this channel's chats (Manage Server; default 5%, 60s)",
   "`ObamaConversation off|status` — disable or inspect this channel's mode",
   "`ObamaDMAll <message>` — DM human server members (server owner)",
@@ -141,11 +143,11 @@ export class ObamaBot {
   private async handleMessage(message: Message): Promise<void> {
     if (message.author.bot || message.webhookId || message.system || !message.inGuild() || !message.member) return;
     const images = [...(message.attachments?.values() ?? [])].filter(isImageAttachment);
-    if (images.length && this.client.user && matchBotMention(message.content, this.client.user.id).mentioned) {
+    let parsed = parseCommand(message.content, this.settings.get(message.guildId).shortcutsEnabled);
+    if (parsed.kind !== "command" && images.length && this.client.user && matchBotMention(message.content, this.client.user.id).mentioned) {
       await this.handleImageMention(message, images);
       return;
     }
-    let parsed = parseCommand(message.content);
     // Explicit commands keep their behavior; all other direct mentions get one text reply.
     if (parsed.kind !== "command" && this.client.user) {
       const mention = matchBotMention(message.content, this.client.user.id);
@@ -198,7 +200,7 @@ export class ObamaBot {
       const response = await this.conversations.reply({
         guildId: message.guildId, channelId: message.channelId,
         displayName: message.member?.displayName ?? message.author.displayName,
-        prompt: IMAGE_UNDERSTANDING_PROMPT, images, source: "image",
+        prompt: matchBotMention(message.content, this.client.user!.id).prompt || IMAGE_UNDERSTANDING_PROMPT, images, source: "image",
       });
       await sendLongReply(message, response);
     } catch (error) {
@@ -213,7 +215,17 @@ export class ObamaBot {
     const guild = message.guild;
     const member = message.member!;
     if (command.name === "help") {
-      await message.reply(HELP);
+      await sendLongReply(message, HELP);
+      return;
+    }
+    if (command.name === "shortcuts") {
+      if (command.action !== "status") {
+        requireManager(member);
+        await this.settings.mutate(guild.id, (settings) => {
+          settings.shortcutsEnabled = command.action === "toggle" ? !settings.shortcutsEnabled : command.action === "on";
+        });
+      }
+      await message.reply(`Command shortcuts are **${this.settings.get(guild.id).shortcutsEnabled ? "on" : "off"}** in this server.\n${SHORTCUT_HELP}`);
       return;
     }
     if (command.name === "conversation") {
@@ -313,11 +325,25 @@ export class ObamaBot {
       }
       this.activeImages.add(guild.id);
       try {
-        await message.reply("Generating your image…");
+        let reference;
+        if (command.recreate) {
+          const attachments = [...(message.attachments?.values() ?? [])].filter(isImageAttachment);
+          if (attachments.length !== 1) {
+            await message.reply("Attach exactly one PNG, JPEG, or WebP image (up to 5 MB) with `ObamaImage --recreate [instructions]`.");
+            return;
+          }
+          try {
+            [reference] = await loadAttachedImages(attachments);
+          } catch (error) {
+            await message.reply(error instanceof Error ? error.message : "Could not read the attached image.");
+            return;
+          }
+        }
+        await message.reply(command.recreate ? "Recreating your image…" : "Generating your image…");
         const generator = useGemini
           ? new GeminiImageGenerator(apiKey, this.config.geminiImageModel)
           : new OpenAIImageGenerator(apiKey, this.config.openaiImageModel);
-        const image = await generator.generate(command.prompt);
+        const image = await generator.generate(command.prompt, reference);
         await message.reply({ files: [new AttachmentBuilder(image, { name: `obama-image.${imageExtension(image)}` })] });
       } finally {
         this.activeImages.delete(guild.id);

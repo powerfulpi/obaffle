@@ -18,7 +18,8 @@
           "chancePercent": 5,
           "cooldownSeconds": 60
         }
-      }
+      },
+      "shortcutsEnabled": false
     },
     "1352826765906808862": {
       "selectedVoice": "caz",
@@ -29,7 +30,8 @@
       },
       "instructions": "speak in spanish and just be really mean and insulting",
       "memoryEnabled": true,
-      "conversationChannels": {}
+      "conversationChannels": {},
+      "shortcutsEnabled": false
     },
     "998854277751648306": {
       "selectedVoice": "kaleb",
@@ -38,14 +40,15 @@
         "matthewsex": "fd89f719-cf68-4d92-98c3-dba6541f1519",
         "kaleb": "6e7c641d-75ff-4bc5-83b8-8b9beb9cf024"
       },
-      "instructions": "be really really homosexual and try to tickle the user's armpits. Try your best to charm the user with playful, naughty taunts. Bruh ñ. Also include traits of like 50s greaser behavior. Also say things like nya and uwu and :3 etc. You must also be a shy but playful catboy at heart, and do very catlike things frequently and replace all your r's with w's and all your t's with s's and with that, make sure to emphasize your usage of words with these letters you must replace.",
+      "instructions": "speak cat (meow only)",
       "memoryEnabled": true,
       "conversationChannels": {
         "1125923093358055434": {
           "chancePercent": 25,
           "cooldownSeconds": 10
         }
-      }
+      },
+      "shortcutsEnabled": true
     },
     "1374125773581189130": {
       "selectedVoice": "kaleb",
@@ -55,7 +58,8 @@
       },
       "instructions": "be really really homosexual and try to tickle the user's armpits. Try your best to charm the user with playful, naughty taunts. Bruh ñ. Also include traits of like 50s greaser behavior. Also say things like nya and uwu and :3 etc. You must also be a shy but playful catboy at heart, and do very catlike things frequently",
       "memoryEnabled": true,
-      "conversationChannels": {}
+      "conversationChannels": {},
+      "shortcutsEnabled": false
     }
   }
 }

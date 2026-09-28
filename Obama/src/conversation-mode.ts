@@ -1,5 +1,7 @@
 import { MessageType, type Message } from "discord.js";
 
+import { isImageAttachment, loadAttachedImages } from "./image-understanding.js";
+import type { ChatImage } from "./types.js";
 import type { ConversationService } from "./conversation-service.js";
 import type { Logger } from "./logger.js";
 import type { SettingsStore } from "./settings-store.js";
@@ -69,6 +71,7 @@ export class ConversationModeService {
     // Failed requests also back off, so an unavailable provider cannot cause a request storm.
     this.nextEligibleAt.set(channelId, this.now() + config.cooldownSeconds * 1_000);
     const trigger = transcriptEntry(message);
+    const triggerAttachments = [...message.attachments.values()];
 
     try {
       const history = await message.channel.messages.fetch({
@@ -81,14 +84,33 @@ export class ConversationModeService {
       const preceding = [...history.values()]
         .filter((entry) => entry.channelId === channelId && BigInt(entry.id) < BigInt(message.id))
         .sort((left, right) => BigInt(left.id) < BigInt(right.id) ? -1 : 1)
-        .slice(-14)
-        .map(transcriptEntry);
+        .slice(-14);
+      const transcript = [...preceding.map(transcriptEntry), trigger];
+      const attachmentGroups = [...preceding.map((entry) => [...entry.attachments.values()]), triggerAttachments];
+      const images: ChatImage[] = [];
+      // Prefer the trigger and then recent history; keep image indices tied to their messages.
+      let attempts = 0;
+      for (let index = attachmentGroups.length - 1; index >= 0 && attempts < 3; index--) {
+        for (const attachment of attachmentGroups[index]!.filter(isImageAttachment)) {
+          if (attempts++ >= 3) break;
+          try {
+            const loaded = await loadAttachedImages([attachment]);
+            images.push(...loaded);
+            transcript[index]!.imageReferences.push({ attachment: attachment.name, image: images.length });
+          } catch {
+            // A broken attachment must not prevent a reply to the rest of the conversation.
+          }
+          if (!this.isCurrent(guildId, channelId, token, config)) return;
+        }
+      }
       const response = await this.conversations.reply({
         guildId,
         channelId,
         displayName: "Channel transcript",
         source: "conversation",
-        prompt: JSON.stringify([...preceding, trigger]),
+        prompt: JSON.stringify(transcript),
+        linkTexts: transcript.slice().reverse().flatMap((entry) => [entry.content, ...entry.embeds.map((embed) => embed.url ?? "")]),
+        ...(images.length ? { images } : {}),
       });
       if (!this.isCurrent(guildId, channelId, token, config)) return;
 
@@ -126,6 +148,10 @@ function transcriptEntry(message: Message) {
     author: (message.member?.displayName ?? message.author.globalName ?? message.author.username).slice(0, 128),
     kind: message.system ? "system" : message.webhookId ? "webhook" : message.author.bot ? "bot" : "user",
     content: message.content.slice(0, 4_000),
+    imageReferences: [] as { attachment: string; image: number }[],
+    embeds: (message.embeds ?? []).slice(0, 3).map((embed) => ({
+      title: embed.title?.slice(0, 256), description: embed.description?.slice(0, 2_000), url: embed.url,
+    })),
     attachments: [...message.attachments.values()].slice(0, 10)
       .map((attachment) => `[attachment: ${(attachment.name ?? "unnamed file").slice(0, 256)}]`),
   };

@@ -1,5 +1,6 @@
 import type { AppConfig } from "./config.js";
 import type { Logger } from "./logger.js";
+import { extractLinks, loadLinkContext, LINK_INSTRUCTIONS } from "./link-context.js";
 import { ConversationMemory } from "./memory.js";
 import { SettingsStore } from "./settings-store.js";
 import type { ChatImage, ChatProvider } from "./types.js";
@@ -10,6 +11,7 @@ export interface ConversationRequest {
   displayName: string;
   prompt: string;
   images?: ChatImage[];
+  linkTexts?: string[];
   source: "image" | "voice" | "text" | "speak" | "status" | "conversation";
 }
 
@@ -22,6 +24,7 @@ export class ConversationService {
     private readonly settings: SettingsStore,
     private readonly memory: ConversationMemory,
     private readonly logger: Logger,
+    private readonly links = loadLinkContext,
   ) {}
 
   public async reply(request: ConversationRequest): Promise<string> {
@@ -46,11 +49,15 @@ export class ConversationService {
       });
       const baseInstructions = guildSettings.instructions ?? this.config.defaultInstructions;
       const conversationMode = request.source === "conversation";
+      const linkTexts = request.linkTexts ?? [request.prompt, ...history.slice().reverse().map((message) => message.content)];
+      const linked = request.source !== "status" && extractLinks(linkTexts).length
+        ? await this.links(linkTexts, Math.max(0, 3 - (request.images?.length ?? 0)))
+        : { text: "", images: [] };
+      const images = [...(request.images ?? []), ...linked.images];
+      const instructions = conversationMode ? `${baseInstructions}\n\n${conversationInstructions}` : baseInstructions;
       const response = await this.provider.generate({
-        instructions: conversationMode
-          ? `${baseInstructions}\n\n${conversationInstructions}`
-          : baseInstructions,
-        messages: [...history, { role: "user", content: userContent, ...(request.images ? { images: request.images } : {}) }],
+        instructions: `${instructions}\n\n${LINK_INSTRUCTIONS}`,
+        messages: [...history, { role: "user", content: userContent + linked.text, ...(images.length ? { images } : {}) }],
         maxOutputCharacters: conversationMode
           ? Math.min(this.config.maxResponseCharacters, 2_000)
           : this.config.maxResponseCharacters,
@@ -100,4 +107,6 @@ const conversationInstructions =
   "Use this transcript as your only conversation history. " +
   "Make one brief, natural contribution relevant to the conversation, usually one or two sentences. " +
   "Do not summarize the transcript, prepend a speaker label, or mention the random trigger. " +
-  "Attachment placeholders indicate files you have not opened; do not invent their contents.";
+  "Image references identify supplied images by their one-based position and the message they belong to. " +
+  "Other attachment placeholders indicate files you have not opened; do not invent their contents. " +
+  "Embed previews are partial descriptions from Discord, not proof that the full linked page was read.";

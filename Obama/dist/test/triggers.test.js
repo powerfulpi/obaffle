@@ -8,6 +8,7 @@ function textFixture() {
     let ambient = 0;
     let errors = 0;
     const context = {
+        settings: { get: () => ({ shortcutsEnabled: false }) },
         client: { user: { id: "12345" } },
         conversationMode: { async handleMessage() { ambient++; } },
         async executeCommand(_message, command) { commands.push(command); },

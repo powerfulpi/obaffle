@@ -64,6 +64,7 @@ export class SettingsStore {
       }
       this.data = parsed as PersistedSettings;
       for (const settings of Object.values(this.data.guilds)) {
+        settings.shortcutsEnabled = settings.shortcutsEnabled === true;
         settings.conversationChannels = sanitizeConversationChannels(settings.conversationChannels);
       }
     } catch (error) {
@@ -76,6 +77,7 @@ export class SettingsStore {
   public get(guildId: string): GuildSettings {
     const existing = this.data.guilds[guildId];
     if (existing) {
+      existing.shortcutsEnabled = existing.shortcutsEnabled === true;
       existing.conversationChannels = sanitizeConversationChannels(existing.conversationChannels);
       existing.voices.original = this.originalVoiceId;
       if (!existing.voices[existing.selectedVoice]) {
@@ -89,6 +91,7 @@ export class SettingsStore {
       voices: { original: this.originalVoiceId },
       instructions: null,
       memoryEnabled: true,
+      shortcutsEnabled: false,
       conversationChannels: {},
     };
     this.data.guilds[guildId] = created;
