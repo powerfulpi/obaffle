@@ -52,6 +52,8 @@ export class BotManager extends EventEmitter {
     this.graceMs = graceMs;
     this.echo = echo;
     this.logs = [];
+    this.aiLogs = [];
+    this.aiLogLimit = 200;
     this.sequence = 0;
     this.closing = false;
     this.bots = new Map(specs.map((spec) => [spec.id, {
@@ -78,6 +80,22 @@ export class BotManager extends EventEmitter {
     if (this.logs.length > this.logLimit) this.logs.shift();
     if (this.echo) process.stdout.write(`[${id}/${stream}] ${entry.text}\n`);
     this.emit('log', entry);
+    if (id === 'obama' && stream === 'stdout' && entry.text.startsWith('GEMINI_API_LOG ')) {
+      try {
+        const call = JSON.parse(entry.text.slice('GEMINI_API_LOG '.length));
+        if (['chat', 'transcription', 'image'].includes(call.kind)
+          && typeof call.model === 'string' && call.model.length <= 100
+          && (call.status === null || Number.isInteger(call.status))
+          && typeof call.success === 'boolean'
+          && Number.isInteger(call.durationMs) && call.durationMs >= 0) {
+          const aiEntry = { id: entry.id, time: entry.time, kind: call.kind, model: call.model,
+            status: call.status, success: call.success, durationMs: call.durationMs };
+          this.aiLogs.push(aiEntry);
+          if (this.aiLogs.length > this.aiLogLimit) this.aiLogs.shift();
+          this.emit('ai-log', aiEntry);
+        }
+      } catch { /* Ignore unrelated or malformed process output. */ }
+    }
   }
 
   capture(stream, id, type) {

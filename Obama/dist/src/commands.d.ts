@@ -26,6 +26,13 @@ export type BotCommand = {
 } | {
     name: "global-status";
 } | {
+    name: "phone";
+    action: "show" | "reset" | "help";
+} | {
+    name: "phone";
+    action: "greeting" | "personality" | "voice";
+    value: string;
+} | {
     name: "restart";
 } | {
     name: "privacy";

@@ -80,6 +80,25 @@ test('logs are bounded, control characters stripped, and shutdown stops both bot
   } finally { await manager.shutdown(); }
 });
 
+test('Gemini call metadata has a separate bounded feed and appears in snapshots', async (t) => {
+  const manager = makeManager();
+  manager.aiLogLimit = 2;
+  const control = await createControlServer({ manager, port: 0 });
+  t.after(async () => { await manager.shutdown(); await control.close(); });
+  const seen = [];
+  manager.on('ai-log', (entry) => seen.push(entry));
+  manager.log('obama', 'stdout', 'GEMINI_API_LOG {"kind":"chat","model":"gemini-test","status":200,"success":true,"durationMs":123}');
+  manager.log('waffle', 'stdout', 'GEMINI_API_LOG {"kind":"chat","model":"wrong-bot","status":200,"success":true,"durationMs":1}');
+  manager.log('obama', 'stdout', 'GEMINI_API_LOG {"kind":"chat","model":"secret","status":200,"success":true,"durationMs":1,"prompt":"private"}');
+  manager.log('obama', 'stdout', 'GEMINI_API_LOG {"kind":"image","model":"gemini-image","status":429,"success":false,"durationMs":31}');
+  assert.equal(seen.length, 3);
+  assert.equal(manager.aiLogs.length, 2);
+  assert.equal(manager.aiLogs[0].model, 'secret');
+  assert.equal(manager.aiLogs[0].prompt, undefined);
+  const state = await (await fetch(control.origin + '/api/state')).json();
+  assert.deepEqual(state.aiLogs, manager.aiLogs);
+});
+
 test('localhost HTTP controls, SSE replay, and request boundaries work end to end', async (t) => {
   const manager = makeManager([spec('obama'), spec('waffle')]);
   const control = await createControlServer({ manager, port: 0 });
@@ -88,7 +107,9 @@ test('localhost HTTP controls, SSE replay, and request boundaries work end to en
   const request = (path, options) => fetch(control.origin + path, options);
   const page = await request('/');
   assert.equal(page.status, 200);
-  assert.match(await page.text(), /Obama overview/);
+  assert.match(await page.text(), /Access required/);
+  const dashboardPage = await request('/index2.html');
+  assert.match(await dashboardPage.text(), /Obama overview/);
   assert.match(page.headers.get('content-security-policy'), /frame-src http:\/\/127.0.0.1:3000/);
   assert.equal((await request('/.env')).status, 404);
   // fetch normalizes Host to its URL; use raw HTTP to exercise DNS rebinding.

@@ -33,7 +33,7 @@ if (isLoginPage) {
     window.location.href = '/';
   }
 
-  let bots = [], logs = [], token = '', filter = 'all', limit = 1000;
+  let bots = [], logs = [], aiLogs = [], token = '', filter = 'all', limit = 1000, aiLimit = 200;
   let connected = false, dashboardAvailable = false, dashboardUrl = '', clearedThrough = 0;
   let renderedFrame = false, renderPending = false;
   const pending = new Set();
@@ -112,6 +112,28 @@ if (isLoginPage) {
     container.scrollTop = $('follow').checked ? container.scrollHeight : scrollTop;
   }
 
+  function renderAiLogs() {
+    const fragment = document.createDocumentFragment();
+    for (const entry of [...aiLogs].reverse()) {
+      const row = document.createElement('div');
+      row.className = 'ai-row';
+      const time = document.createElement('time');
+      time.dateTime = entry.time;
+      time.textContent = new Date(entry.time).toLocaleString();
+      const kind = document.createElement('span'); kind.textContent = entry.kind;
+      const model = document.createElement('span'); model.textContent = entry.model;
+      const result = document.createElement('span');
+      result.className = entry.success ? 'ai-success' : 'ai-failure';
+      result.textContent = entry.success ? 'OK' : entry.status ? `Failed · HTTP ${entry.status}` : 'Failed';
+      const duration = document.createElement('span'); duration.textContent = `${entry.durationMs.toLocaleString()} ms`;
+      row.append(time, kind, model, result, duration);
+      fragment.append(row);
+    }
+    $('ai-logs').replaceChildren(fragment);
+    $('ai-count').textContent = aiLogs.length.toLocaleString();
+    $('ai-empty').hidden = aiLogs.length > 0;
+  }
+
   function connection(value) {
     connected = value;
     $('connection').textContent = value ? 'Launcher connected' : 'Disconnected · retrying';
@@ -124,16 +146,22 @@ if (isLoginPage) {
     const data = JSON.parse(event.data);
     if (token && token !== data.token) clearedThrough = 0;
     token = data.token; bots = data.bots; logs = data.logs; limit = data.logLimit;
+    aiLogs = data.aiLogs ?? []; aiLimit = data.aiLogLimit ?? 200;
     dashboardUrl = data.dashboardUrl; dashboardAvailable = data.dashboardAvailable;
     $('frame-address').textContent = new URL(dashboardUrl).host;
     $('open-dashboard').href = dashboardUrl;
-    connection(true); scheduleLogs();
+    connection(true); scheduleLogs(); renderAiLogs();
   });
   events.addEventListener('state', (event) => { bots = JSON.parse(event.data); renderBots(); });
   events.addEventListener('log', (event) => {
     logs.push(JSON.parse(event.data));
     if (logs.length > limit) logs.splice(0, logs.length - limit);
     scheduleLogs();
+  });
+  events.addEventListener('ai-log', (event) => {
+    aiLogs.push(JSON.parse(event.data));
+    if (aiLogs.length > aiLimit) aiLogs.splice(0, aiLogs.length - aiLimit);
+    renderAiLogs();
   });
   events.addEventListener('dashboard', (event) => { dashboardAvailable = JSON.parse(event.data).available; renderFrame(); });
   events.onerror = () => connection(false);
@@ -164,4 +192,3 @@ if (isLoginPage) {
   $('reload-frame').addEventListener('click', () => { if (renderedFrame) $('obama-frame').src = dashboardUrl; });
   setInterval(renderBots, 1000);
 }
-

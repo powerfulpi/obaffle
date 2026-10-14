@@ -8,3 +8,10 @@ export declare class GeminiProvider implements ChatProvider, SpeechRecognizer {
     transcribe(wavAudio: Buffer): Promise<string>;
     private request;
 }
+export declare function logGeminiCall(entry: {
+    kind: "chat" | "transcription" | "image";
+    model: string;
+    status: number | null;
+    success: boolean;
+    durationMs: number;
+}): void;

@@ -62,6 +62,15 @@ export function parseCommand(content, shortcutsEnabled = false) {
                 : { kind: "error", message: "Usage: `ObamaSpeak <message>`" };
         case "obamavoice":
             return parseVoice(tail);
+        case "obamaphone": {
+            const action = tail[0]?.toLowerCase() ?? "help";
+            if ((action === "show" || action === "reset" || action === "help") && tail.length <= 1)
+                return { kind: "command", command: { name: "phone", action } };
+            if ((action === "greeting" || action === "personality" || action === "voice") && tail.length > 1) {
+                return { kind: "command", command: { name: "phone", action, value: prompt.slice(tail[0].length).trim() } };
+            }
+            return { kind: "error", message: "Invalid phone command." };
+        }
         case "obamainstructions":
             return parseInstructions(trimmed, head, tail);
         case "obamamemory":

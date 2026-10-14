@@ -20,7 +20,7 @@ export class GeminiProvider implements ChatProvider, SpeechRecognizer {
         ],
       })),
       systemInstruction: { parts: [{ text: request.instructions }] },
-    });
+    }, "chat");
     const text = extractGeminiText(response).trim();
     if (!text) throw new Error("Gemini returned an empty response");
     return truncateUtf16(text, request.maxOutputCharacters);
@@ -48,31 +48,46 @@ export class GeminiProvider implements ChatProvider, SpeechRecognizer {
           ],
         },
       ],
-    });
+    }, "transcription");
     return extractGeminiText(response).trim();
   }
 
-  private async request(model: string, body: unknown): Promise<GeminiResponse> {
+  private async request(model: string, body: unknown, kind: "chat" | "transcription"): Promise<GeminiResponse> {
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "x-goog-api-key": this.apiKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(60_000),
-    });
-    const text = await response.text();
-    if (!response.ok) {
-      throw new Error(`Gemini request failed (${response.status}): ${text.slice(0, 500)}`);
-    }
+    const started = Date.now();
+    let status: number | null = null;
+    let success = false;
     try {
-      return JSON.parse(text) as GeminiResponse;
-    } catch {
-      throw new Error("Gemini returned invalid JSON");
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "x-goog-api-key": this.apiKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(60_000),
+      });
+      status = response.status;
+      const text = await response.text();
+      if (!response.ok) {
+        throw new Error(`Gemini request failed (${response.status}): ${text.slice(0, 500)}`);
+      }
+      try {
+        const result = JSON.parse(text) as GeminiResponse;
+        success = true;
+        return result;
+      } catch {
+        throw new Error("Gemini returned invalid JSON");
+      }
+    } finally {
+      logGeminiCall({ kind, model, status, success, durationMs: Date.now() - started });
     }
   }
+}
+
+export function logGeminiCall(entry: { kind: "chat" | "transcription" | "image"; model: string; status: number | null; success: boolean; durationMs: number }): void {
+  // Only metadata is emitted. Prompts, responses, audio, images, and API keys stay out of this feed.
+  console.log(`GEMINI_API_LOG ${JSON.stringify(entry)}`);
 }
 
 interface GeminiResponse {

@@ -13,6 +13,7 @@ import { OpenAIImageGenerator, imageExtension } from "./providers/openai-image-g
 import { ConversationMemory } from "./memory.js";
 import { createProviders } from "./providers/index.js";
 import { normalizeVoiceAlias, SettingsStore } from "./settings-store.js";
+import { PhoneSettingsStore, DEFAULT_PHONE_SETTINGS } from "./phone-settings.js";
 import { VoiceManager } from "./voice-manager.js";
 const HELP = [
     "**Conversation**",
@@ -50,6 +51,7 @@ export class ObamaBot {
     restart;
     client;
     settings;
+    phoneSettings;
     memory;
     conversations;
     conversationMode;
@@ -86,6 +88,7 @@ export class ObamaBot {
         });
         this.captions = new LiveCaptions(this.client, logger);
         this.settings = new SettingsStore(config.dataDir, config.cartesiaDefaultVoiceId);
+        this.phoneSettings = new PhoneSettingsStore(config.dataDir);
         this.memory = new ConversationMemory(config.maxMemoryMessages);
         const providers = createProviders(config);
         this.speechRecognition = providers.speechRecognition;
@@ -129,7 +132,7 @@ export class ObamaBot {
                     kind: "command",
                     command: {
                         name: "text",
-                        prompt: mention.prompt || "I mentioned you without a question. Greet me briefly and ask what I need.",
+                        prompt: mention.prompt || "I mentioned you without a question. angrily ask me what i needed.",
                     },
                 };
             }
@@ -190,6 +193,49 @@ export class ObamaBot {
         const member = message.member;
         if (command.name === "help") {
             await sendLongReply(message, HELP);
+            return;
+        }
+        if (command.name === "phone") {
+            if (!await canReadGlobalStatus(this.client, message.author.id)) {
+                await message.reply("Unknown Obama command. Type `ObamaHelp` for the command list.");
+                return;
+            }
+            const usage = "`ObamaPhone show` · `ObamaPhone greeting <text>` · `ObamaPhone personality <instructions>` · `ObamaPhone voice <Cartesia voice ID>` · `ObamaPhone greeting|personality|voice reset` · `ObamaPhone reset`";
+            if (command.action === "help") {
+                await message.reply(usage);
+                return;
+            }
+            const current = await this.phoneSettings.load();
+            if (command.action === "show") {
+                await message.reply({ content: `**Phone settings**\nGreeting: ${current.greeting}\nPersonality: ${current.personality ?? "Default"}\nVoice ID: ${current.voiceId ?? "Default"}\n${usage}`, allowedMentions: { parse: [] } });
+                return;
+            }
+            const next = { ...current };
+            if (command.action === "reset")
+                Object.assign(next, DEFAULT_PHONE_SETTINGS);
+            else if ("value" in command && command.action === "greeting") {
+                if (command.value.length > 500) {
+                    await message.reply("Greeting must be 500 characters or fewer.");
+                    return;
+                }
+                next.greeting = command.value.toLowerCase() === "reset" ? DEFAULT_PHONE_SETTINGS.greeting : command.value;
+            }
+            else if ("value" in command && command.action === "personality") {
+                if (command.value.length > 4000) {
+                    await message.reply("Personality must be 4000 characters or fewer.");
+                    return;
+                }
+                next.personality = command.value.toLowerCase() === "reset" ? null : command.value;
+            }
+            else if ("value" in command) {
+                if (command.value.length > 200 || /\s/.test(command.value)) {
+                    await message.reply("Enter a valid Cartesia voice ID (200 characters or fewer).");
+                    return;
+                }
+                next.voiceId = command.value.toLowerCase() === "reset" ? null : command.value;
+            }
+            await this.phoneSettings.save(next);
+            await message.reply("Phone settings saved. New calls will use them.");
             return;
         }
         if (command.name === "shortcuts") {

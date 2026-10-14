@@ -1,0 +1,12 @@
+[Unit]
+Description=Obama phone server and Cloudflare Tunnel
+
+[Service]
+Type=simple
+WorkingDirectory=/home/aidensmith/obaffle/Obama
+ExecStart=/usr/bin/npm run phone:host
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

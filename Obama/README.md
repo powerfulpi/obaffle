@@ -1,5 +1,27 @@
 # Obama Discord Bot
 
+## Phone calls with Twilio
+
+### Cloudflare Tunnel on this computer
+
+For `phone.shantry.com`, create a **remotely managed** Cloudflare Tunnel in the Cloudflare dashboard under **Networking → Tunnels**. Name it `obama-phone`. Add a **published application** route with hostname `phone.shantry.com`, service type **HTTP**, and service URL `http://127.0.0.1:3003`. Set `PHONE_PORT=3003` in `.env`; port 3002 is already used by Uptime Kuma on this computer. Do not put Cloudflare Access authentication in front of this route; Twilio must reach the webhook and WebSocket without a browser login.
+
+Cloudflared is kept at `Obama/.local/bin/cloudflared` and ignored by Git. In the tunnel's **Add a replica** page, copy only the tunnel token from the installation command and put it in `Obama/.env` as `CLOUDFLARE_TUNNEL_TOKEN=<token>`; keep it private. Set `PHONE_PUBLIC_URL=https://phone.shantry.com`. From `Obama/`, run `npm run phone:host` to build and start both the phone server and the tunnel. To keep it running across logouts and reboots on this computer, use the included `phone-host.service` user unit. The Twilio incoming-call webhook is `https://phone.shantry.com/phone/<PHONE_WEBHOOK_TOKEN>` with method POST. Do not include angle brackets.
+
+The phone server is a separate process that shares the configured AI, transcription, and Cartesia providers. It accepts inbound calls through Twilio Media Streams. Callers can speak normally after the AI disclosure greeting; no wake word is needed. Each call's conversation history stays in memory until the call ends. The phone number must be called by the user; this server does not place outbound calls.
+
+The Discord bot application owner can privately manage the phone from any server where the bot is present using `ObamaPhone show`, `ObamaPhone greeting <text>`, `ObamaPhone personality <instructions>`, `ObamaPhone voice <Cartesia voice ID>`, `ObamaPhone greeting|personality|voice reset`, and `ObamaPhone reset`. These commands are intentionally omitted from `ObamaHelp`. Settings are saved in `data/phone-settings.json` and apply to new calls without restarting the phone server. The AI identity disclosure always precedes a custom greeting.
+
+The phone server waits for Twilio to confirm that each spoken reply has finished playing, then ignores the next 500 ms of incoming audio. Callers should wait until the reply ends before speaking. It requires at least 350 ms of audio above `PHONE_MIN_RMS_DBFS=-35` before sending an utterance to transcription. If quiet callers are missed, lower that threshold (for example, `-40`) or reduce `PHONE_MIN_ACTIVE_SPEECH_MS`; if background sounds still trigger it, raise the threshold toward `-30`. Restart `phone-host.service` after changing these values.
+
+1. Set the usual provider keys and `CARTESIA_DEFAULT_VOICE_ID` in `Obama/.env`. You do not need a Discord token for the phone process. Set `AI_PROVIDER` and `STT_PROVIDER` to the providers for which you have keys.
+2. Generate a secret with `openssl rand -base64 36 | tr '+/' '-_' | tr -d '='` and add `PHONE_WEBHOOK_TOKEN=<secret>` to `.env`.
+3. Set `PHONE_PUBLIC_URL=https://your-public-host` and optionally `PHONE_PORT=3002`. The public host must forward HTTPS and WebSocket traffic to `127.0.0.1:3002`. A tunnel such as Cloudflare Tunnel or a reverse proxy with TLS works; keep it running while calls are expected.
+4. Run `npm run build` and `npm run phone` from `Obama/`.
+5. In Twilio Console, buy a **Voice-capable local number**. Under that number's **Voice configuration**, set **A call comes in** to **Webhook**, method **HTTP POST**, URL `https://your-public-host/phone/<secret>`. Save and call the number.
+
+Use the same host and secret in the Twilio webhook URL as in `.env`. The phone server listens on loopback; do not expose port 3002 directly. Keep the webhook URL secret because it grants access to your paid call bridge. The server limits calls to 15 minutes and logs transcribed caller speech to the console. Twilio, your speech provider, AI provider, and Cartesia process call data; obtain caller consent where required. Twilio bills the number and incoming minutes separately from provider usage.
+
 A Discord bot that can converse in voice channels and text channels. It supports OpenAI or Gemini for responses, either provider for speech recognition, and Cartesia for every spoken response.
 
 The bot is intentionally configured to identify itself as an assistant rather than the real Barack Obama. Only use a Cartesia voice you have permission to use, and disclose the bot and its audio processing to everyone in a voice channel.

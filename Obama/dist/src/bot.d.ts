@@ -7,6 +7,7 @@ export declare class ObamaBot {
     private readonly restart?;
     readonly client: Client;
     private readonly settings;
+    private readonly phoneSettings;
     private readonly memory;
     private readonly conversations;
     private readonly conversationMode;

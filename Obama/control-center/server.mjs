@@ -64,9 +64,9 @@ export async function createControlServer({ manager, port = 3001, obamaPort = 30
   let origin;
   let dashboardAvailable = false;
   let probing = false;
-  const dashboardUrl = `http://0.0.0.0:${obamaPort}`;
-  const snapshot = () => ({ bots: manager.status(), logs: manager.logs, token, dashboardUrl,
-    dashboardAvailable, logLimit: manager.logLimit });
+  const dashboardUrl = `http://127.0.0.1:${obamaPort}`;
+  const snapshot = () => ({ bots: manager.status(), logs: manager.logs, aiLogs: manager.aiLogs, token, dashboardUrl,
+    dashboardAvailable, logLimit: manager.logLimit, aiLogLimit: manager.aiLogLimit });
   const send = (response, event, data) => {
     if (response.destroyed) return;
     // Disconnect a stalled browser rather than buffering logs indefinitely.
@@ -76,8 +76,10 @@ export async function createControlServer({ manager, port = 3001, obamaPort = 30
   const broadcast = (event, data) => { for (const response of streams) send(response, event, data); };
   const onState = (bots) => { broadcast('state', bots); void probeDashboard(); };
   const onLog = (entry) => broadcast('log', entry);
+  const onAiLog = (entry) => broadcast('ai-log', entry);
   manager.on('state', onState);
   manager.on('log', onLog);
+  manager.on('ai-log', onAiLog);
 
   async function probeDashboard() {
     if (probing) return;
@@ -112,9 +114,9 @@ export async function createControlServer({ manager, port = 3001, obamaPort = 30
     };
     // Binding to loopback plus checking Host/Origin prevents cross-site control
     // and DNS rebinding. The action token is only available to this local page.
-    //if (!allowedHosts.has(host) || (requestOrigin && !allowedOrigins.has(requestOrigin)) || request.headers['sec-fetch-site'] === 'cross-site') {
-      //json(403, { error: 'Only the local dashboard can access this server.' }); return;
-   // }
+   // if (!allowedHosts.has(host) || (requestOrigin && !allowedOrigins.has(requestOrigin)) || request.headers['sec-fetch-site'] === 'cross-site') {
+     // json(403, { error: 'Only the local dashboard can access this server.' }); return;
+    //}
     const path = (request.url ?? '/').split('?')[0];
     if (request.method === 'GET' && path === '/' && host.startsWith('localhost:')) {
       response.writeHead(302, { Location: `${origin}/` }); response.end(); return;
@@ -150,16 +152,16 @@ export async function createControlServer({ manager, port = 3001, obamaPort = 30
   server.maxRequestsPerSocket = 1000;
   await new Promise((resolve, reject) => {
     server.once('error', reject);
-    server.listen(port, '0.0.0.0', () => { server.removeListener('error', reject); resolve(); });
+    server.listen(port, '127.0.0.1', () => { server.removeListener('error', reject); resolve(); });
   });
-  origin = `http://0.0.0.0:${server.address().port}`;
+  origin = `http://127.0.0.1:${server.address().port}`;
   const heartbeat = setInterval(() => { for (const response of streams) send(response, 'ping', {}); }, 15_000);
   const probeTimer = setInterval(() => void probeDashboard(), 2000);
   return {
     server, origin,
     async close() {
       clearInterval(heartbeat); clearInterval(probeTimer);
-      manager.off('state', onState); manager.off('log', onLog);
+      manager.off('state', onState); manager.off('log', onLog); manager.off('ai-log', onAiLog);
       for (const response of streams) response.end();
       await new Promise((resolve) => { server.close(resolve); server.closeAllConnections(); });
     },

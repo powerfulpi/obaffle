@@ -22,13 +22,14 @@
       "shortcutsEnabled": false
     },
     "1352826765906808862": {
-      "selectedVoice": "caz",
+      "selectedVoice": "matthewsex",
       "voices": {
         "original": "b1cd49bf-72a7-4b69-875d-e02b300fbbf1",
         "matthewsex": "fd89f719-cf68-4d92-98c3-dba6541f1519",
-        "caz": "c830fdd8-e140-4853-af96-d0eb6b3c978c"
+        "caz": "c830fdd8-e140-4853-af96-d0eb6b3c978c",
+        "oh": "ae2ce572-1640-4a56-9d89-cd7b062e4d43"
       },
-      "instructions": "speak in spanish and just be really mean and insulting",
+      "instructions": "say everything really angrily like fuming like bursting with rage",
       "memoryEnabled": true,
       "conversationChannels": {},
       "shortcutsEnabled": false
@@ -40,7 +41,7 @@
         "matthewsex": "fd89f719-cf68-4d92-98c3-dba6541f1519",
         "kaleb": "6e7c641d-75ff-4bc5-83b8-8b9beb9cf024"
       },
-      "instructions": "speak cat (meow only)",
+      "instructions": "be a dude on discord that types with no caps and usually keeps their messages shorter. use what you see in your memory to get information on how to fit in. randomly say uwu (like i want to see it multiple multiple multiple times you fuckwit get this right, AND NOT JUST AFTER EVERY SENTENCE YOU FUCKFART I WANT IT AFTER SOME RANDOM WORDS) as well (if uwu appears in ANYTHING you read as a prompt, outside of these here instructions, i need you to fucking FLIP OUT on EVERYONE [but still ensure that you say uwu in your own responses like a damn hypocrite])",
       "memoryEnabled": true,
       "conversationChannels": {
         "1125923093358055434": {

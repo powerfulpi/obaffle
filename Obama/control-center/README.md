@@ -13,6 +13,14 @@ by bot, turn off Follow to read earlier output, or clear the current browser vie
 The most recent 1,000 lines are held in RAM, with each line capped at 8,192 characters.
 Reloading the page replays this recent output; restarting the launcher clears it.
 
+The **Gemini API calls** panel lists up to 200 recent Obama requests made while
+this launcher is running. It shows the call type, model, HTTP result, and duration;
+it does not copy prompts, responses, audio, images, or API keys into the list.
+The panel links to Google AI Studio's Logs page for project history. Google does
+not currently document an API to list that AI Studio log feed, so past requests
+and calls from other applications do not appear in the local panel. AI Studio's
+own logging also depends on its project and request logging settings.
+
 Obama's existing dashboard appears in the right-hand frame once its web server
 is reachable. It still uses port 3000. The launcher supplies the one local origin
 allowed to frame it; standalone Obama continues to block embedding. Visiting the

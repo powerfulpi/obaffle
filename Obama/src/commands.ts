@@ -9,6 +9,8 @@ export type BotCommand =
   | { name: "help" }
   | { name: "status" }
   | { name: "global-status" }
+  | { name: "phone"; action: "show" | "reset" | "help" }
+  | { name: "phone"; action: "greeting" | "personality" | "voice"; value: string }
   | { name: "restart" }
   | { name: "privacy" }
   | { name: "voice"; action: "list" }
@@ -105,6 +107,14 @@ export function parseCommand(content: string, shortcutsEnabled = false): ParseRe
         : { kind: "error", message: "Usage: `ObamaSpeak <message>`" };
     case "obamavoice":
       return parseVoice(tail);
+    case "obamaphone": {
+      const action = tail[0]?.toLowerCase() ?? "help";
+      if ((action === "show" || action === "reset" || action === "help") && tail.length <= 1) return { kind: "command", command: { name: "phone", action } };
+      if ((action === "greeting" || action === "personality" || action === "voice") && tail.length > 1) {
+        return { kind: "command", command: { name: "phone", action, value: prompt.slice(tail[0]!.length).trim() } };
+      }
+      return { kind: "error", message: "Invalid phone command." };
+    }
     case "obamainstructions":
       return parseInstructions(trimmed, head, tail);
     case "obamamemory":
