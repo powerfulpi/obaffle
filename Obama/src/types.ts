@@ -1,3 +1,5 @@
+import type { SpeechOptions } from "./speech-options.js";
+
 export type ProviderName = "openai" | "gemini";
 
 export interface ChatImage {
@@ -30,7 +32,7 @@ export interface ConversationChannelSettings {
   cooldownSeconds: number;
 }
 
-export interface GuildSettings {
+export interface GuildSettings extends SpeechOptions {
   selectedVoice: string;
   voices: Record<string, string>;
   instructions: string | null;

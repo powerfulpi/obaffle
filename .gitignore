@@ -3223,3 +3223,17 @@ Obama/.local/
 /sshkey.pub
 Obama/livekit-phone/.env.example
 Obama/.env.save
+
+# Keep deployable source in Git; transfer host state separately.
+**/node_modules/
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/.ruff_cache/
+*.py[cod]
+*.env
+.env
+.env.*
+!.env.example
+Obama/dist/
+Obama/data/

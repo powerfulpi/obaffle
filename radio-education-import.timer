@@ -1,0 +1,10 @@
+[Unit]
+Description=Resume RadiObama Education playlist import with a cooldown
+
+[Timer]
+OnBootSec=15min
+OnUnitInactiveSec=2h
+Unit=radio-education-import.service
+
+[Install]
+WantedBy=timers.target

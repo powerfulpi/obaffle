@@ -96,8 +96,8 @@ function voiceFixture(transcript: string) {
     captions: { post(..._args: string[]) {} },
     client: { users: { async fetch() { return { displayName: "Tester" }; } } },
     conversations: { async reply(request: ConversationRequest) { requests.push(request); return "Here's my answer."; } },
-    settings: { getSelectedVoiceId: () => "voice" },
-    tts: { async synthesize(text: string) { synthesized.push(text); return { discordPcm: Buffer.alloc(4) }; } },
+    settings: { getSelectedVoiceId: () => "voice", get: () => ({ speechMode: "worst", speechEmotion: "sad" }) },
+    tts: { async synthesize(text: string, voiceId: string, options: unknown) { assert.equal(voiceId, "voice"); assert.deepEqual(options, { speechMode: "worst", speechEmotion: "sad" }); synthesized.push(text); return { discordPcm: Buffer.alloc(4) }; } },
     voice: { interrupt(_guild: string) {}, speak(guild: string) { played.push(guild); return true; } },
   };
   const utterance = { guildId: "guild", channelId: "voice-channel", userId: "user", pcm: Buffer.alloc(4) };
@@ -218,4 +218,30 @@ it("image mentions take priority over command text and never reach ambient repli
   assert.equal(calls, 1);
   assert.equal(f.commands.length, 0);
   assert.equal(f.ambient(), 0);
+});
+
+it("spoken instructions let anyone replace server settings without generating a conversation reply", async () => {
+  for (const scenario of [
+    { text: "Hey, Obama, instructions set: Be brief. Keep punctuation!", expected: "Be brief. Keep punctuation!" },
+    { text: "Please Obama instructions set Be cheerful", expected: "Be cheerful" },
+    { text: "Obama instructions set", expected: null },
+    { text: "Obama instructions set " + "x".repeat(8001), expected: null },
+  ]) {
+    const f = voiceFixture(scenario.text);
+    let saved: string | null = null;
+    let cleared = 0;
+    const context = {
+      ...f.context,
+      settings: { ...f.context.settings, async mutate(guild: string, update: (value: { instructions: string | null }) => void) {
+        assert.equal(guild, "guild");
+        const value = { instructions: null as string | null }; update(value); saved = value.instructions;
+      } },
+      memory: { clearGuild(guild: string) { assert.equal(guild, "guild"); cleared++; } },
+    };
+    await methods.handleVoiceUtterance.call(context, f.utterance);
+    assert.equal(saved, scenario.expected);
+    assert.equal(cleared, scenario.expected === null ? 0 : 1);
+    assert.equal(f.requests.length, 0);
+    assert.equal(f.synthesized.length, 1);
+  }
 });

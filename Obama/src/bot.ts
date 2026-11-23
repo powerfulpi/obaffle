@@ -1,3 +1,4 @@
+import { SPEECH_EMOTIONS, WORST_SPEECH_MODEL } from "./speech-options.js";
 import {
   ActivityType,
   AttachmentBuilder,
@@ -10,7 +11,7 @@ import {
 
 import { pcmStereoToWav } from "./audio.js";
 import { CartesiaTts } from "./cartesia.js";
-import { SHORTCUT_HELP, parseCommand, matchBotMention, matchWakeWord, isVoiceStop, type BotCommand } from "./commands.js";
+import { SHORTCUT_HELP, parseCommand, matchBotMention, matchWakeWord, matchVoiceInstructions, isVoiceStop, type BotCommand } from "./commands.js";
 import type { AppConfig } from "./config.js";
 import { ConversationService } from "./conversation-service.js";
 import { ConversationModeService } from "./conversation-mode.js";
@@ -47,8 +48,11 @@ const HELP = [
   "",
   "**Voice and behavior**",
   "Say `Obama, stop` to interrupt speech, then ask a follow-up.",
+  "Say `Obama instructions set <text>` anywhere in a sentence to replace server instructions (anyone).",
   "`ObamaRestart` — restart the bot (Administrator)",
   "`ObamaVoice list|set <name>|reset`",
+  "`ObamaVoice model current|worst|toggle|status` — change this server’s speech model",
+  "`ObamaVoice emotion list|auto|<emotion>` — choose this server’s speech emotion",
   "`ObamaVoice add <name> <Cartesia voice ID>` / `remove <name>` (admin)",
   "`ObamaInstructions show|set <text>|reset` (admin to change)",
   "`ObamaMemory on|off|status|clear` (admin)",
@@ -159,7 +163,7 @@ export class ObamaBot {
           kind: "command",
           command: {
             name: "text",
-            prompt: mention.prompt || "I mentioned you without a question. angrily ask me what i needed.",
+            prompt: mention.prompt || "I mentioned you without a question. Greet me briefly and ask what I need.",
           },
         };
       }
@@ -412,6 +416,8 @@ export class ObamaBot {
         chatModel: this.config.aiProvider === "gemini" ? this.config.geminiModel : this.config.openaiModel,
         voiceSessionInThisServer: this.voice.isConnected(guild.id),
         selectedVoice: settings.selectedVoice,
+        speechMode: settings.speechMode,
+        speechEmotion: settings.speechEmotion ?? "auto",
         conversationMemoryEnabled: settings.memoryEnabled,
         imageGenerationInProgressInThisServer: this.activeImages.has(guild.id),
         voiceResponseInProgressInThisServer: this.activeVoiceResponses.has(guild.id),
@@ -445,7 +451,7 @@ export class ObamaBot {
         await sendLongReply(message, response);
       } else {
         const voiceId = this.settings.getSelectedVoiceId(guild.id);
-        const audio = await this.tts.synthesize(response, voiceId);
+        const audio = await this.tts.synthesize(response, voiceId, this.settings.get(guild.id));
         const attachment = new AttachmentBuilder(audio.wav, { name: "obama-response.wav" });
         await message.reply({ files: [attachment] });
       }
@@ -508,6 +514,28 @@ export class ObamaBot {
   ): Promise<void> {
     const guildId = message.guild.id;
     const settings = this.settings.get(guildId);
+    if (command.action === "model") {
+      if (command.mode !== "status") {
+        await this.settings.mutate(guildId, (value) => {
+          value.speechMode = command.mode === "toggle"
+            ? (value.speechMode === "worst" ? "current" : "worst")
+            : command.mode === "worst" ? "worst" : "current";
+        });
+      }
+      await message.reply(`Server speech mode: **${settings.speechMode}** (${settings.speechMode === "worst" ? WORST_SPEECH_MODEL + ", slowest speed: 0.6" : this.config.cartesiaModel + ", default speed"}). Emotion: **${settings.speechEmotion ?? "auto"}**.`);
+      return;
+    }
+    if (command.action === "emotion") {
+      if (command.emotion === "list") {
+        await message.reply(`Server emotion: **${settings.speechEmotion ?? "auto"}**. Use \`ObamaVoice emotion <name>\`: auto, ${SPEECH_EMOTIONS.join(", ")}.`);
+        return;
+      }
+      await this.settings.mutate(guildId, (value) => {
+        value.speechEmotion = command.emotion === "auto" || command.emotion === "list" ? null : command.emotion;
+      });
+      await message.reply(`Server speech emotion: **${settings.speechEmotion ?? "auto"}**.`);
+      return;
+    }
     if (command.action === "list") {
       const voices = Object.keys(settings.voices)
         .sort()
@@ -658,11 +686,25 @@ export class ObamaBot {
       if (!current()) return;
       const displayName = user?.displayName ?? user?.username ?? userId;
       this.captions.post(guildId, channelId, displayName, transcript);
-      const response = prompt ? await this.conversations.reply({
-        guildId, channelId, displayName, prompt, source: "voice",
-      }) : "Yes?";
+      const instructions = matchVoiceInstructions(transcript, this.config.wakeWord);
+      let response: string;
+      if (instructions !== null) {
+        if (!instructions) {
+          response = "Say Obama instructions set, followed by the instructions you want me to use.";
+        } else if (instructions.length > 8_000) {
+          response = "Instructions must be 8,000 characters or fewer.";
+        } else {
+          await this.settings.mutate(guildId, (value) => { value.instructions = instructions; });
+          this.memory.clearGuild(guildId);
+          response = "Updated the instructions and cleared this server's runtime memory.";
+        }
+      } else {
+        response = prompt ? await this.conversations.reply({
+          guildId, channelId, displayName, prompt, source: "voice",
+        }) : "Yes?";
+      }
       if (!current()) return;
-      const audio = await this.tts.synthesize(response, this.settings.getSelectedVoiceId(guildId));
+      const audio = await this.tts.synthesize(response, this.settings.getSelectedVoiceId(guildId), this.settings.get(guildId));
       if (!current()) return;
       if (this.voice.speak(guildId, audio.discordPcm)) {
         this.captions.post(guildId, channelId, "Obama", response);

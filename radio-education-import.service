@@ -1,0 +1,10 @@
+[Unit]
+Description=Import Spotify playlist matches into RadiObama Education pool
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+WorkingDirectory=/home/aidensmith/obaffle
+ExecStart=/home/aidensmith/obaffle/Waffle/.venv/bin/python /home/aidensmith/obaffle/radio/import_spotify.py https://open.spotify.com/playlist/5LrP1LmhhADDgQxepmLVYV
+Nice=10

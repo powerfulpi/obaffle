@@ -1,0 +1,11 @@
+music/
+announcements/
+apple-matches.json
+spotify-matches.json
+spotify-import-status.json
+downloaded.txt
+__pycache__/
+hls/
+host-cache/
+admin.env
+settings.json

@@ -1,0 +1,15 @@
+[Unit]
+Description=Local web radio
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/aidensmith/obaffle
+Environment=RADIO_CARTESIA_VOICE_ID=72fde1fa-e2b7-49c6-b0c6-5207ec7998b2
+EnvironmentFile=/home/aidensmith/obaffle/radio/admin.env
+ExecStart=/usr/bin/python3 /home/aidensmith/obaffle/radio/server.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

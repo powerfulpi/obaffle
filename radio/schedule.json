@@ -1,0 +1,5 @@
+[
+  {"start": 6, "end": 12, "folder": "morning"},
+  {"start": 12, "end": 18, "folder": "daytime"},
+  {"start": 18, "end": 6, "folder": "night"}
+]

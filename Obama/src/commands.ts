@@ -1,3 +1,5 @@
+import { isSpeechEmotion, type SpeechEmotion } from "./speech-options.js";
+
 export type BotCommand =
   | { name: "dm"; userId: string; text: string }
   | { name: "text"; prompt: string }
@@ -13,6 +15,8 @@ export type BotCommand =
   | { name: "phone"; action: "greeting" | "personality" | "voice"; value: string }
   | { name: "restart" }
   | { name: "privacy" }
+  | { name: "voice"; action: "model"; mode: "current" | "worst" | "toggle" | "status" }
+  | { name: "voice"; action: "emotion"; emotion: SpeechEmotion | "auto" | "list" }
   | { name: "voice"; action: "list" }
   | { name: "voice"; action: "reset" }
   | { name: "voice"; action: "set" | "remove"; alias: string }
@@ -95,8 +99,8 @@ export function parseCommand(content: string, shortcutsEnabled = false): ParseRe
       return { kind: "error", message: "Usage: `ObamaShortcuts [on|off|status|toggle]`" };
     }
     case "obamaimage":
-      if (/^recreate(?:\s|$)/i.test(prompt)) {
-        return { kind: "command", command: { name: "image", recreate: true, prompt: prompt.slice(10).trim() } };
+      if (/^(?:--)?recreate(?:\s|$)/i.test(prompt)) {
+        return { kind: "command", command: { name: "image", recreate: true, prompt: prompt.replace(/^(?:--)?recreate/i, "").trim() } };
       }
       return prompt
         ? { kind: "command", command: { name: "image", prompt } }
@@ -136,6 +140,20 @@ export function parseCommand(content: string, shortcutsEnabled = false): ParseRe
 
 function parseVoice(args: string[]): ParseResult {
   const action = args[0]?.toLowerCase();
+  const choice = args[1]?.toLowerCase();
+  if (action === "model" && args.length <= 2) {
+    const mode = choice ?? "status";
+    if (mode === "current" || mode === "worst" || mode === "toggle" || mode === "status") {
+      return { kind: "command", command: { name: "voice", action, mode } };
+    }
+  }
+  if (action === "emotion" && args.length <= 2) {
+    const emotion = choice === "reset" ? "auto" : choice ?? "list";
+    if (emotion === "auto" || emotion === "list" || isSpeechEmotion(emotion)) {
+      return { kind: "command", command: { name: "voice", action, emotion } };
+    }
+  }
+
   if (action === "list" && args.length === 1) {
     return { kind: "command", command: { name: "voice", action: "list" } };
   }
@@ -157,7 +175,7 @@ function parseVoice(args: string[]): ParseResult {
   return {
     kind: "error",
     message:
-      "Usage: `ObamaVoice list`, `ObamaVoice set <name>`, `ObamaVoice add <name> <Cartesia voice ID>`, `ObamaVoice remove <name>`, or `ObamaVoice reset`.",
+      "Usage: `ObamaVoice model [current|worst|toggle|status]`, `ObamaVoice emotion [list|auto|<emotion>]`, `ObamaVoice list`, `ObamaVoice set <name>`, `ObamaVoice add <name> <Cartesia voice ID>`, `ObamaVoice remove <name>`, or `ObamaVoice reset`.",
   };
 }
 
@@ -310,4 +328,17 @@ export function isVoiceStop(transcript: string, wakeWord: string): boolean {
   const escaped = wakeWord.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const prompt = wake.prompt.replace(new RegExp(`(?:[,\\s]+)${escaped}[.!?]*$`, "iu"), "");
   return /^(?:please\s+)?(?:stop|stop talking|stop speaking|be quiet|cancel)(?:\s+please)?[.!?,]*$/i.test(prompt.trim());
+}
+
+/** Extract instructions after the spoken command, wherever it occurs. */
+export function matchVoiceInstructions(transcript: string, wakeWord: string): string | null {
+  const name = wakeWord.trim();
+  if (!name) return null;
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const separator = "[\\s,.:;!?—–-]+";
+  const match = new RegExp(
+    `(?:^|[^\\p{L}\\p{N}\\p{M}_])${escaped}${separator}instructions${separator}set(?![\\p{L}\\p{N}\\p{M}_])[\\s,.:;!?—–-]*`,
+    "iu",
+  ).exec(transcript);
+  return match ? transcript.slice(match.index + match[0].length).trim() : null;
 }

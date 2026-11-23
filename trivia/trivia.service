@@ -1,0 +1,15 @@
+[Unit]
+Description=Gather Round Trivia game
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/aidensmith/obaffle/trivia
+EnvironmentFile=/home/aidensmith/obaffle/trivia/service.env
+ExecStart=/usr/bin/node /home/aidensmith/obaffle/trivia/server.js
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

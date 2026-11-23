@@ -11,7 +11,7 @@ const attachment = { url: "https://cdn.discordapp.com/attachments/a/b/test.png",
 
 it("recreation accepts an empty prompt or preserves optional instructions", () => {
   assert.deepEqual(parseCommand("ObamaImage --recreate"), { kind: "command", command: { name: "image", recreate: true, prompt: "" } });
-  assert.deepEqual(parseCommand("OI --RECREATE keep colors\nand text", true), { kind: "command", command: { name: "image", recreate: true, prompt: "keep colors\nand text" } });
+  assert.deepEqual(parseCommand("OIM --RECREATE keep colors\nand text", true), { kind: "command", command: { name: "image", recreate: true, prompt: "keep colors\nand text" } });
   assert.deepEqual(parseCommand("ObamaImage --recreateish"), { kind: "command", command: { name: "image", prompt: "--recreateish" } });
 });
 

@@ -48,6 +48,7 @@ export function buildGlobalStatus(
       `Voice session connected: ${voice.isConnected(id) ? "yes" : "no"}`,
       `Conversation memory: ${value.memoryEnabled ? "on" : "off"} (RAM only)`,
       `Selected voice: ${value.selectedVoice}`,
+      `Speech mode: ${value.speechMode}; emotion: ${value.speechEmotion ?? "auto"}`,
       "", "VOICES (alias -> Cartesia voice ID)",
       ...Object.entries(value.voices).sort(([a], [b]) => a.localeCompare(b)).map(([alias, voiceId]) =>
         `  ${alias}${alias === value.selectedVoice ? " [selected]" : ""}${alias === "original" ? " [environment default]" : " [custom]"} -> ${voiceId}`),

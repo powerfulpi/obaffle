@@ -97,3 +97,12 @@ it("captions require both destination IDs and reject a mismatched destination gu
   assert.equal(sends, 0);
   assert.equal(warnings, 1);
 });
+
+it("instruction commands match anywhere with transcription punctuation and preserve the remaining text", async () => {
+  const { matchVoiceInstructions } = await import("../src/commands.js");
+  assert.equal(matchVoiceInstructions("Well OBAMA, instructions set: Be kind.\nThen be funny!", "Obama"), "Be kind.\nThen be funny!");
+  assert.equal(matchVoiceInstructions("Obama instructions set", "Obama"), "");
+  for (const text of ["preObama instructions set hi", "Obama instructions setting hi", "Obama change instructions", "Obamacare instructions set hi"]) {
+    assert.equal(matchVoiceInstructions(text, "Obama"), null);
+  }
+});

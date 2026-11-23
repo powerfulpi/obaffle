@@ -1,0 +1,14 @@
+[Unit]
+Description=Drop Zone file drop
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/aidensmith/obaffle/dropbox-site
+EnvironmentFile=/home/aidensmith/obaffle/dropbox-site/.env
+ExecStart=/home/aidensmith/obaffle/dropbox-site/.venv/bin/gunicorn --workers 2 --timeout 180 --bind 127.0.0.1:3005 app:app
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

@@ -114,9 +114,9 @@ export async function createControlServer({ manager, port = 3001, obamaPort = 30
     };
     // Binding to loopback plus checking Host/Origin prevents cross-site control
     // and DNS rebinding. The action token is only available to this local page.
-   // if (!allowedHosts.has(host) || (requestOrigin && !allowedOrigins.has(requestOrigin)) || request.headers['sec-fetch-site'] === 'cross-site') {
-     // json(403, { error: 'Only the local dashboard can access this server.' }); return;
-    //}
+    if (!allowedHosts.has(host) || (requestOrigin && !allowedOrigins.has(requestOrigin)) || request.headers['sec-fetch-site'] === 'cross-site') {
+      json(403, { error: 'Only the local dashboard can access this server.' }); return;
+    }
     const path = (request.url ?? '/').split('?')[0];
     if (request.method === 'GET' && path === '/' && host.startsWith('localhost:')) {
       response.writeHead(302, { Location: `${origin}/` }); response.end(); return;

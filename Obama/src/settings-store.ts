@@ -1,3 +1,4 @@
+import { normalizeSpeechOptions } from "./speech-options.js";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
@@ -64,6 +65,7 @@ export class SettingsStore {
       }
       this.data = parsed as PersistedSettings;
       for (const settings of Object.values(this.data.guilds)) {
+        Object.assign(settings, normalizeSpeechOptions(settings));
         settings.shortcutsEnabled = settings.shortcutsEnabled === true;
         settings.conversationChannels = sanitizeConversationChannels(settings.conversationChannels);
       }
@@ -77,6 +79,7 @@ export class SettingsStore {
   public get(guildId: string): GuildSettings {
     const existing = this.data.guilds[guildId];
     if (existing) {
+      Object.assign(existing, normalizeSpeechOptions(existing));
       existing.shortcutsEnabled = existing.shortcutsEnabled === true;
       existing.conversationChannels = sanitizeConversationChannels(existing.conversationChannels);
       existing.voices.original = this.originalVoiceId;
@@ -87,6 +90,8 @@ export class SettingsStore {
     }
 
     const created: GuildSettings = {
+      speechMode: "current",
+      speechEmotion: null,
       selectedVoice: "original",
       voices: { original: this.originalVoiceId },
       instructions: null,

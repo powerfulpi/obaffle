@@ -1,0 +1,8 @@
+[Unit]
+Description=Sync public Apple Music playlist into web radio
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/aidensmith/obaffle
+ExecStart=/home/aidensmith/obaffle/Waffle/.venv/bin/python /home/aidensmith/obaffle/radio/sync_playlists.py

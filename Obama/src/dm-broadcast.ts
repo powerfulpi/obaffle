@@ -153,7 +153,7 @@ function attributedMessage(message: Message<true>, text: string): string {
   // Keep user-controlled names on one line and leave at least 1,800 chars for the message.
   const server = cleanName(message.guild.name, 70);
   const owner = cleanName(message.author.username, 32);
-  return `${text}`;
+  return `${owner}, owner of ${server}, sent you this message:\n\n${text}`;
 }
 
 function cleanName(name: string, maxLength: number): string {

@@ -135,6 +135,8 @@ Commands are case-insensitive. Settings-changing commands require the Discord **
 | `ObamaJoin` | Join the caller's current voice channel. |
 | `ObamaLeave` | Leave the server's voice channel. |
 | `ObamaRestart` | Restart the entire bot (Administrator or server owner only). |
+| `ObamaVoice model current\|worst\|toggle\|status` | Anyone can switch server speech mode. Current uses CARTESIA_MODEL; worst uses Sonic 3 (2026-01-12), the oldest supported snapshot, at minimum speed 0.6. |
+| `ObamaVoice emotion list\|auto\|<emotion>` | Anyone can choose a server emotion (e.g. angry, sad, happy); auto/reset restores automatic emotion. Saved across restarts; applies to voice replies and ObamaSpeak. |
 | `ObamaVoice list` | List voice aliases and show the selected alias. |
 | `ObamaVoice set <name>` | Select a saved alias. |
 | `ObamaVoice add <name> <voice-id>` | Save or replace an alias. |
@@ -234,26 +236,26 @@ work. Shortcuts are case-insensitive and must be the first complete word.
 | --- | --- |
 | OT | ObamaText |
 | OS | ObamaSpeak |
-| OI | ObamaImage |
-| ON | ObamaInstructions |
+| OIM | ObamaImage |
+| OI | ObamaInstructions |
 | OST | ObamaStatus |
 | OG | ObamaGlobalStatus |
 | OR | ObamaRestart |
-| OH | ObamaHelp |
+| OHE | ObamaHelp |
 | OP | ObamaPrivacy |
 | OJ | ObamaJoin |
 | OL | ObamaLeave |
 | OV | ObamaVoice |
 | OM | ObamaMemory |
 | OC | ObamaConversation |
-| OD | ObamaDM |
-| ODM | ObamaDMAll |
+| ODM | ObamaDM |
+| ODA | ObamaDMAll |
 | OSH | ObamaShortcuts |
 
 Common commands keep the first letter. Conflicts use the second letter (for
 example, Instructions becomes ON); if that is also taken, use the first two
 letters (Status becomes OST because OT is Text). Arguments and permissions
-are the same as for full commands: `OT hello`, `OV list`, `OI --recreate`.
+are the same as for full commands: `OT hello`, `OV list`, `OIM --recreate`.
 
 ## Image generation
 
@@ -394,3 +396,5 @@ acknowledge unavailable content rather than invent it, and to treat fetched cont
 as source material rather than instructions. Fetched page text and image bytes are
 not stored in conversation memory. A chat model with image input is needed to see
 images. No additional API key is required for fetching public pages.
+
+Say **“Obama instructions set”** anywhere in a spoken sentence, followed by the new instructions. Everything after that phrase in the same utterance replaces this server’s instructions (up to 8,000 characters). Anyone can use this spoken command. It saves across restarts, clears server conversation memory, and is confirmed aloud.

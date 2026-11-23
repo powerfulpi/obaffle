@@ -1,0 +1,14 @@
+[Unit]
+Description=TubeDrop YouTube downloader
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/aidensmith/obaffle/youtube-downloader
+EnvironmentFile=/home/aidensmith/obaffle/youtube-downloader/service.env
+ExecStart=/home/aidensmith/obaffle/youtube-downloader/.venv/bin/python /home/aidensmith/obaffle/youtube-downloader/app.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

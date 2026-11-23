@@ -1,0 +1,709 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="theme-color" content="#eee6d2">
+    <meta name="description"
+        content="RadiObama. A live radio station for wherever you are. Listen in, request a song, stay awhile.">
+    <title>RadiObama — leave it on</title>
+    <style>
+        :root {
+            --paper: #eee6d2;
+            --ink: #222320;
+            --red: #a83f2f;
+            --red-dark: #802e23;
+            --yellow: #e6b54f;
+            --faint: #797468
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        html {
+            scroll-behavior: smooth
+        }
+
+        body {
+            margin: 0;
+            background: var(--paper);
+            color: var(--ink);
+            font: 16px/1.5 Georgia, 'Times New Roman', serif
+        }
+
+        body:before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 10;
+            opacity: .16;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.38'/%3E%3C/svg%3E")
+        }
+
+        button,
+        input {
+            font: inherit
+        }
+
+        button {
+            cursor: pointer
+        }
+
+        button:disabled {
+            opacity: .5;
+            cursor: wait
+        }
+
+        a {
+            color: inherit;
+            text-underline-offset: 3px
+        }
+
+        a:hover {
+            color: var(--red)
+        }
+
+        .shell {
+            width: min(1120px, calc(100% - 48px));
+            margin: auto
+        }
+
+        .masthead {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            border-bottom: 2px solid var(--ink);
+            padding: 18px 0 14px;
+            font: 700 .72rem/1.3 Arial, Helvetica, sans-serif;
+            letter-spacing: .13em;
+            text-transform: uppercase
+        }
+
+        .masthead p {
+            margin: 0
+        }
+
+        .masthead nav {
+            display: flex;
+            gap: 23px
+        }
+
+        .masthead nav a {
+            text-decoration: none
+        }
+
+        .small-name {
+            font-weight: 900;
+            letter-spacing: -.02em;
+            font-size: .85rem
+        }
+
+        .hero {
+            display: grid;
+            grid-template-columns: 1.15fr .85fr;
+            gap: 30px;
+            min-height: 555px;
+            border-bottom: 2px solid var(--ink);
+            padding: 45px 0 40px
+        }
+
+        .hero-copy {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start
+        }
+
+        .issue {
+            font: 700 .72rem Arial, Helvetica, sans-serif;
+            letter-spacing: .15em;
+            text-transform: uppercase;
+            margin-bottom: 22px;
+            color: var(--red)
+        }
+
+        h1 {
+            font: 900 clamp(5.5rem, 11vw, 10rem)/.77 Impact, 'Arial Narrow', sans-serif;
+            letter-spacing: -.075em;
+            text-transform: uppercase;
+            margin: 0 0 25px;
+            transform: scaleX(.92);
+            transform-origin: left center
+        }
+
+        h1 span {
+            display: block;
+            color: var(--red);
+            margin-left: 5vw
+        }
+
+        .tagline {
+            font: italic clamp(1.55rem, 2.6vw, 2.4rem)/1.2 Georgia, serif;
+            max-width: 460px;
+            margin: 15px 0 28px;
+            letter-spacing: -.035em
+        }
+
+        .intro {
+            max-width: 415px;
+            margin: 0 0 26px;
+            color: #4e4d45;
+            font-size: 1rem
+        }
+
+        .hero-actions {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 19px;
+            margin-top: auto
+        }
+
+        .listen {
+            border: 2px solid var(--ink);
+            background: var(--red);
+            color: #fff;
+            padding: 14px 22px;
+            box-shadow: 5px 5px 0 var(--ink);
+            font: 900 1rem Arial, Helvetica, sans-serif;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            transition: transform .15s, box-shadow .15s
+        }
+
+        .listen:hover {
+            transform: translate(2px, 2px);
+            box-shadow: 3px 3px 0 var(--ink)
+        }
+
+        .jump {
+            font: 700 .8rem Arial, Helvetica, sans-serif;
+            text-transform: uppercase;
+            letter-spacing: .06em
+        }
+
+        .art {
+            position: relative;
+            display: grid;
+            place-items: center;
+            min-height: 465px;
+            overflow: hidden;
+            border: 2px solid var(--ink);
+            background: var(--yellow)
+        }
+
+        .art:before {
+            content: '';
+            position: absolute;
+            inset: 18px;
+            border: 1px solid #25241f99
+        }
+
+        .art:after {
+            content: 'A LITTLE BIT OF obama';
+            position: absolute;
+            top: 29px;
+            left: -55px;
+            transform: rotate(-16deg);
+            padding: 9px 60px;
+            background: var(--paper);
+            border: 1px solid var(--ink);
+            font: 900 .68rem Arial, Helvetica, sans-serif;
+            letter-spacing: .12em
+        }
+
+        .disc {
+            position: relative;
+            width: min(78%, 345px);
+            aspect-ratio: 1;
+            border-radius: 50%;
+            background: repeating-radial-gradient(circle, #262722 0 2px, #393a31 3px 4px, #1c1d1b 5px 10px);
+            border: 9px solid #252622;
+            box-shadow: 9px 16px 0 #1c1c1960;
+            animation: turn 18s linear infinite
+        }
+
+        .disc:before {
+            content: '';
+            position: absolute;
+            inset: 31%;
+            border-radius: 50%;
+            background: var(--red);
+            border: 5px solid var(--paper)
+        }
+
+        .disc:after {
+            content: 'R O';
+            position: absolute;
+            inset: 0;
+            display: grid;
+            place-items: center;
+            font: 900 2.1rem Impact, sans-serif;
+            letter-spacing: -.04em;
+            color: var(--paper)
+        }
+
+        .art-note {
+            position: absolute;
+            right: 18px;
+            bottom: 18px;
+            background: var(--paper);
+            border: 1px solid var(--ink);
+            padding: 8px 11px;
+            transform: rotate(3deg);
+            font: 700 .62rem Arial, Helvetica, sans-serif;
+            letter-spacing: .14em
+        }
+
+        .strip {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            background: var(--ink);
+            color: var(--paper);
+            padding: 12px 17px;
+            font: 700 .75rem Arial, Helvetica, sans-serif;
+            letter-spacing: .1em;
+            text-transform: uppercase
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 9px
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #f16a55;
+            box-shadow: 0 0 0 3px #f16a5540;
+            animation: blink 1.8s ease-in-out infinite
+        }
+
+        .dot.idle {
+            background: #aaa;
+            box-shadow: none;
+            animation: none
+        }
+
+        .numbers {
+            display: flex;
+            gap: 25px
+        }
+
+        .numbers strong {
+            color: var(--yellow)
+        }
+
+        .content {
+            display: grid;
+            grid-template-columns: .96fr 1.04fr;
+            gap: 55px;
+            padding: 58px 0 88px
+        }
+
+        .kicker {
+            display: inline-block;
+            border-bottom: 2px solid var(--red);
+            color: var(--red);
+            padding-bottom: 4px;
+            font: 900 .75rem Arial, Helvetica, sans-serif;
+            letter-spacing: .12em;
+            text-transform: uppercase
+        }
+
+        .onair,
+        .request {
+            min-width: 0
+        }
+
+        .onair h2 {
+            font: 900 clamp(2.6rem, 4.5vw, 4.8rem)/.98 Impact, 'Arial Narrow', sans-serif;
+            text-transform: uppercase;
+            letter-spacing: -.035em;
+            margin: 22px 0 8px
+        }
+
+        .artist {
+            font: italic 1.35rem Georgia, serif;
+            color: #5f5b51;
+            margin: 0 0 30px
+        }
+
+        .player-label {
+            margin: 0 0 7px;
+            font: 700 .72rem Arial, Helvetica, sans-serif;
+            letter-spacing: .12em;
+            text-transform: uppercase
+        }
+
+        .onair audio {
+            display: block;
+            width: 100%;
+            height: 54px;
+            accent-color: var(--red)
+        }
+
+        .hint {
+            max-width: 410px;
+            margin: 15px 0 0;
+            color: #696357;
+            font: .85rem/1.5 Arial, Helvetica, sans-serif
+        }
+
+        .host-card {
+            margin-top: 28px;
+            border-top: 1px solid var(--ink);
+            padding-top: 16px
+        }
+
+        .host-card[hidden] {
+            display: none
+        }
+
+        .host-card strong {
+            font: 900 .72rem Arial, Helvetica, sans-serif;
+            text-transform: uppercase;
+            letter-spacing: .12em;
+            color: var(--red)
+        }
+
+        .host-card p {
+            font: italic 1.03rem/1.5 Georgia, serif;
+            margin: 8px 0 0
+        }
+
+        .request {
+            border-left: 2px solid var(--ink);
+            padding-left: 55px
+        }
+
+        .request h2 {
+            font: 900 clamp(2.7rem, 4.5vw, 4.6rem)/.96 Impact, 'Arial Narrow', sans-serif;
+            text-transform: uppercase;
+            margin: 22px 0 14px;
+            letter-spacing: -.035em
+        }
+
+        .request>p {
+            max-width: 360px
+        }
+
+        .request-copy {
+            color: #625e55;
+            font-style: italic
+        }
+
+        .search-label {
+            display: block;
+            margin: 25px 0 9px;
+            font: 900 .72rem Arial, Helvetica, sans-serif;
+            text-transform: uppercase;
+            letter-spacing: .12em
+        }
+
+        .search-wrap {
+            position: relative
+        }
+
+        .search-wrap svg {
+            position: absolute;
+            left: 13px;
+            top: 50%;
+            transform: translateY(-50%);
+            pointer-events: none
+        }
+
+        .search-wrap input {
+            width: 100%;
+            background: #f7f0df;
+            border: 2px solid var(--ink);
+            border-radius: 0;
+            padding: 13px 14px 13px 43px;
+            outline: none;
+            box-shadow: 4px 4px 0 #2223202b
+        }
+
+        .search-wrap input:focus {
+            border-color: var(--red);
+            box-shadow: 4px 4px 0 #a83f2f55
+        }
+
+        .search-wrap input::placeholder {
+            color: #807b70
+        }
+
+        #searchHint {
+            min-height: 18px;
+            margin: 12px 0 0;
+            color: #777166;
+            font: .79rem Arial, Helvetica, sans-serif
+        }
+
+        #message {
+            min-height: 19px;
+            margin: 5px 0;
+            color: var(--red-dark);
+            font: 700 .83rem Arial, Helvetica, sans-serif
+        }
+
+        #tracks {
+            padding: 0;
+            margin: 12px 0 0;
+            list-style: none;
+            max-height: 425px;
+            overflow: auto
+        }
+
+        #tracks li {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 11px 2px;
+            border-top: 1px solid #948d7e
+        }
+
+        #tracks li span {
+            line-height: 1.3
+        }
+
+        #tracks li button {
+            flex: none;
+            background: transparent;
+            border: 1px solid var(--ink);
+            padding: 6px 10px;
+            font: 900 .68rem Arial, Helvetica, sans-serif;
+            letter-spacing: .05em;
+            text-transform: uppercase
+        }
+
+        #tracks li button:hover {
+            background: var(--ink);
+            color: var(--paper)
+        }
+
+        .footer {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            border-top: 2px solid var(--ink);
+            padding: 22px 0 35px;
+            color: #5c584f;
+            font: .75rem/1.5 Arial, Helvetica, sans-serif
+        }
+
+        .footer a {
+            font-weight: 700
+        }
+
+        @keyframes turn {
+            to {
+                transform: rotate(360deg)
+            }
+        }
+
+        @keyframes blink {
+            50% {
+                opacity: .5
+            }
+        }
+
+        @media(max-width:850px) {
+            .hero {
+                grid-template-columns: 1fr
+            }
+
+            .hero-copy {
+                min-height: 390px
+            }
+
+            .art {
+                min-height: 360px
+            }
+
+            .content {
+                gap: 30px
+            }
+
+            .request {
+                padding-left: 30px
+            }
+        }
+
+        @media(max-width:660px) {
+            .shell {
+                width: min(100% - 32px, 1120px)
+            }
+
+            .masthead {
+                flex-wrap: wrap
+            }
+
+            .masthead nav {
+                gap: 12px
+            }
+
+            .masthead p {
+                display: none
+            }
+
+            .hero {
+                padding: 35px 0;
+                gap: 30px;
+                min-height: 0
+            }
+
+            .hero-copy {
+                min-height: 0
+            }
+
+            h1 {
+                font-size: clamp(5.3rem, 20vw, 8rem)
+            }
+
+            h1 span {
+                margin-left: 5vw
+            }
+
+            .tagline {
+                font-size: 1.6rem
+            }
+
+            .hero-actions {
+                margin-top: 5px
+            }
+
+            .art {
+                min-height: 300px
+            }
+
+            .disc {
+                width: 58%
+            }
+
+            .strip {
+                font-size: .63rem
+            }
+
+            .numbers {
+                gap: 12px
+            }
+
+            .content {
+                grid-template-columns: 1fr;
+                gap: 52px;
+                padding: 45px 0 65px
+            }
+
+            .request {
+                border-left: 0;
+                border-top: 2px solid var(--ink);
+                padding: 35px 0 0
+            }
+
+            .footer {
+                display: block
+            }
+
+            .footer span {
+                display: block;
+                margin-bottom: 8px
+            }
+        }
+
+        @media(prefers-reduced-motion:reduce) {
+
+            *,
+            *:before,
+            *:after {
+                animation-duration: .01ms !important;
+                scroll-behavior: auto !important
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="shell">
+        <header class="masthead"><span class="small-name">RadiObama / online</span>
+            <p>Broadcasting from obama head</p>
+            <nav aria-label="Main navigation"><a href="#now-playing">Listen</a><a href="#requests">Requests</a><a
+                    href="/admin">Admin</a></nav>
+        </header>
+        <main>
+            <section class="hero">
+                <div class="hero-copy"><span class="issue">obama</span>
+                    <h1>Radi<span>Obama</span></h1>
+                    <p class="tagline">obama but radio or wait better yet radiobama</p>
+                    <p class="intro">obamsa osongs</p>
+                    <div class="hero-actions"><button id="listen" class="listen" type="button">▶ Listen live</button><a
+                            href="#requests" class="jump">Make a request ↗</a></div>
+                </div>
+                <div class="art" aria-hidden="true">
+                    <div class="disc"></div><span class="art-note">call obama</span>
+                </div>
+            </section>
+            <div class="strip">
+                <div class="status"><span id="liveDot" class="dot idle"></span><span id="nowState">STANDING BY</span>
+                </div>
+                <div class="numbers"><span><strong id="listeners">0</strong> listening</span><span><strong
+                            id="queueCount">0</strong> in the queue</span></div>
+            </div>
+            <div class="content">
+                <section class="onair" id="now-playing" aria-label="Now playing"><span class="kicker">On the air</span>
+                    <h2 id="nowTitle">Warming up...</h2>
+                    <p id="nowArtist" class="artist">RadiObama</p>
+                    <p class="player-label">The obama radio</p><audio id="audio" controls
+                        aria-label="RadiObama live stream"></audio>
+                    <p class="hint">On iPhone, listen here in Safari. Or use the <a href="/hls/live.m3u8">direct
+                            stream</a> in a radio app.</p>
+                    <div id="hostCard" class="host-card" hidden><strong>A word from the host</strong>
+                        <p id="host"></p>
+                    </div>
+                </section>
+                <section class="request" id="requests" aria-labelledby="request-heading"><span class="kicker">Your
+                        turn</span>
+                    <h2 id="request-heading">song requests</h2>
+                    <p class="request-copy">search the list for a song</p><label
+                        class="search-label" for="search">Song or artist</label>
+                    <div class="search-wrap"><svg width="19" height="19" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <circle cx="11" cy="11" r="7"></circle>
+                            <path d="m16 16 5 5"></path>
+                        </svg><input id="search" type="search" placeholder="Try a song or artist" autocomplete="off">
+                    </div>
+                    <p id="searchHint"></p>
+                    <p id="message" role="status"></p>
+                    <ul id="tracks"></ul>
+                </section>
+            </div>
+        </main>
+        <footer class="footer"><span>RadiObama.</span><span>obamna</span></footer>
+    </div>
+    <script src="/vendor/hls.light.min.js"></script>
+    <script>
+
+
+        let socket, media, buffer, hls, chunks = [], playing = false;
+        const audio = document.getElementById('audio'), button = document.getElementById('listen');
+        function append() { if (!buffer || buffer.updating || !chunks.length) return; try { buffer.appendBuffer(chunks.shift()) } catch (e) { document.getElementById('message').textContent = 'Playback error: ' + e.message; stop() } }
+        function stop() { playing = false; button.textContent = '▶ Listen live'; socket?.close(); socket = null; hls?.destroy(); hls = null; audio.pause(); audio.removeAttribute('src'); audio.load(); chunks = []; buffer = null; if (media) { URL.revokeObjectURL(media.url); media = null } }
+        function start() { document.getElementById('message').textContent = ''; if (audio.canPlayType('application/vnd.apple.mpegurl')) { playing = true; button.textContent = '■ Stop'; audio.src = '/hls/live.m3u8'; audio.play().catch(() => { document.getElementById('message').textContent = 'Stream is starting; try again in a few seconds' }); return } if (window.Hls && Hls.isSupported()) { playing = true; button.textContent = '■ Stop'; hls = new Hls({ liveSyncDurationCount: 2, liveMaxLatencyDurationCount: 5 }); hls.on(Hls.Events.MEDIA_ATTACHED, () => hls?.loadSource('/hls/live.m3u8')); hls.on(Hls.Events.MANIFEST_PARSED, () => { if (playing) audio.play().catch(() => { document.getElementById('message').textContent = 'Press play in the audio controls to start listening.' }) }); hls.on(Hls.Events.ERROR, (_event, data) => { if (!playing) return; if (data.fatal) { document.getElementById('message').textContent = 'Stream connection lost. Press Listen live to retry.'; stop() } }); hls.attachMedia(audio); audio.play().catch(() => { if (playing) document.getElementById('message').textContent = 'Press play in the audio controls to start listening.' }); return } if (!window.MediaSource || !MediaSource.isTypeSupported('audio/mpeg')) { document.getElementById('message').textContent = 'This browser cannot play the live stream.'; return } playing = true; button.textContent = '■ Stop'; media = new MediaSource(); media.url = URL.createObjectURL(media); audio.src = media.url; media.addEventListener('sourceopen', () => { if (!playing) return; buffer = media.addSourceBuffer('audio/mpeg'); buffer.addEventListener('updateend', () => { if (buffer.buffered.length && buffer.buffered.start(0) < audio.currentTime - 30 && !buffer.updating) { try { buffer.remove(0, audio.currentTime - 30); return } catch (e) { } } append() }); socket = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/live'); socket.binaryType = 'arraybuffer'; socket.onmessage = e => { if (chunks.length < 200) chunks.push(e.data); append() }; socket.onclose = () => { if (playing) { document.getElementById('message').textContent = 'Connection lost; reconnecting…'; stop(); setTimeout(start, 2000) } }; audio.play().catch(() => { }) }, { once: true }) }
+        button.onclick = () => playing ? stop() : start();
+        let catalog = [];
+        const search = document.getElementById('search'), results = document.getElementById('tracks'), hint = document.getElementById('searchHint'), message = document.getElementById('message');
+        function rank(track, query) { const label = track.label.toLocaleLowerCase(), terms = query.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean); if (!terms.length) return -1; const parts = label.split(' — '), artist = parts.length > 1 ? parts[0] : '', title = parts.length > 1 ? parts.slice(1).join(' — ') : label; if (!terms.every(term => label.includes(term))) return -1; let score = 0; for (const term of terms) { if (title === term) score += 100; else if (title.startsWith(term)) score += 60; else if (title.split(/\W+/).some(word => word.startsWith(term))) score += 35; else if (title.includes(term)) score += 20; if (artist === term) score += 35; else if (artist.startsWith(term)) score += 20; else if (artist.split(/\W+/).some(word => word.startsWith(term))) score += 12; else if (artist.includes(term)) score += 5 } return score }
+        function renderResults() { results.replaceChildren(); const query = search.value.trim(); if (!query) { hint.textContent = 'Type a song or artist to see requests.'; return } const matches = catalog.map(track => ({ ...track, score: rank(track, query) })).filter(track => track.score >= 0).sort((a, b) => b.score - a.score || a.label.localeCompare(b.label)).slice(0, 10); if (!matches.length) { hint.textContent = 'No matching songs in the station library.'; return } hint.textContent = matches.length === 10 ? 'Showing the 10 best matches. Keep typing to narrow them down.' : ''; for (const track of matches) { const li = document.createElement('li'), name = document.createElement('span'), request = document.createElement('button'); name.textContent = track.label; request.textContent = 'Request'; request.setAttribute('aria-label', 'Request ' + track.label); request.onclick = async () => { request.disabled = true; try { const r = await fetch('/request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ track: track.id }) }); const data = await r.json(); message.textContent = r.ok ? 'Added to queue at #' + data.position : data.error || 'Could not add request' } catch (e) { message.textContent = 'Could not add request' } finally { request.disabled = false } }; li.append(name, request); results.append(li) } }
+        search.addEventListener('input', renderResults);
+        async function refresh() { try { const s = await (await fetch('/status')).json(); const onAir = Boolean(s.now_playing), hosting = s.now_playing?.startsWith('host-cache/'), label = onAir && !hosting ? (s.labels?.[s.now_playing.replace(/^music\//, '')] || s.now_playing.replace(/^music\//, '')) : ''; const parts = label.split(' — '); document.getElementById('nowTitle').textContent = hosting ? 'Obama is on air' : onAir ? (parts.length > 1 ? parts.slice(1).join(' — ') : label) : 'The station is warming up'; document.getElementById('nowArtist').textContent = hosting ? 'Your host is introducing the next song' : onAir && parts.length > 1 ? parts[0] : 'RadiObama'; document.getElementById('nowState').textContent = onAir ? 'ON AIR' : 'STANDING BY'; document.getElementById('liveDot').classList.toggle('idle', !onAir); document.getElementById('host').textContent = hosting ? (s.host_text || '') : ''; document.getElementById('hostCard').hidden = !hosting || !s.host_text; document.getElementById('listeners').textContent = s.listeners; document.getElementById('queueCount').textContent = s.requests_waiting; catalog = s.tracks.map(id => ({ id, label: s.labels?.[id] || id.replace(/^.*\//, '').replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ') })); renderResults() } catch (e) { message.textContent = 'Could not reach station' } } refresh(); setInterval(refresh, 10000)
+    </script>
+</body>
+
+</html>

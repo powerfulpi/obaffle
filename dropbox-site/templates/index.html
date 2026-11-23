@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>drop</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='6') }}">
+</head>
+<body>
+  <div class="page">
+    <header><a class="name" href="{{ url_for('index') }}">drop</a></header>
+    <main>
+      <h1>upload file the
+      </h1>
+      {% with messages = get_flashed_messages() %}{% if messages %}<p class="message" role="status">{{ messages[0] }}</p>{% endif %}{% endwith %}
+      {% if files is none %}
+        <section class="login">
+          <h2>Passcode</h2>
+          <form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><label for="password">Enter the passcode to see and add files.</label><div class="login-row"><input id="password" name="password" type="password" autocomplete="current-password" required autofocus><button type="submit">Enter</button></div></form>
+        </section>
+      {% else %}
+        <nav class="breadcrumbs" aria-label="Folder path"><a href="{{ url_for('index') }}">All files</a>{% for folder in breadcrumbs %}<span>/</span><a href="{{ url_for('index', folder=folder.id) }}" {% if loop.last %}aria-current="page"{% endif %}>{{ folder.name }}</a>{% endfor %}</nav>
+        <section class="upload">
+          <h2>Add files here</h2>
+          <form id="upload-form" action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data">
+            <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="folder_id" value="{{ current_id or '' }}">
+            <label class="file-picker" for="files"><strong>Choose files</strong><span>or drop them here</span><input id="files" name="files" type="file" multiple required></label>
+            <p id="chosen" class="chosen" aria-live="polite">Up to 2 GB per file.</p>
+            <button id="upload-button" type="submit">Upload</button>
+            <div id="upload-progress" class="progress-wrap" hidden><label id="progress-label" for="progress-bar">Uploading…</label><progress id="progress-bar" value="0" max="100">0%</progress><span id="progress-percent">0%</span></div>
+            <p id="upload-error" class="error" role="alert" hidden></p>
+          </form>
+        </section>
+        <section class="shelf">
+          <div class="shelf-heading"><h2>In this folder</h2><form action="{{ url_for('logout') }}" method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="text-button" type="submit">Log out</button></form></div>
+          <form class="new-folder" action="{{ url_for('create_folder') }}" method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="parent_id" value="{{ current_id or '' }}"><label for="folder-name">New folder</label><div><input id="folder-name" name="name" maxlength="200" required placeholder="Folder name"><button type="submit">Create</button></div></form>
+          {% if subfolders or files %}
+            <ul class="file-list">
+            {% for folder in subfolders %}
+              <li class="item"><div class="item-info"><a class="folder-link" href="{{ url_for('index', folder=folder.id) }}">📁 {{ folder.name }}</a><small>Folder</small></div><details class="actions"><summary>Rename / move</summary><div class="action-panel">
+                <form action="{{ url_for('rename_folder', folder_id=folder.id) }}" method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="current_folder" value="{{ current_id or '' }}"><label for="rename-folder-{{ folder.id }}">Rename</label><div><input id="rename-folder-{{ folder.id }}" name="name" value="{{ folder.name }}" maxlength="200" required><button type="submit">Save</button></div></form>
+                <form action="{{ url_for('move_folder', folder_id=folder.id) }}" method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="current_folder" value="{{ current_id or '' }}"><label for="move-folder-{{ folder.id }}">Move to</label><div><select id="move-folder-{{ folder.id }}" name="destination"><option value="">All files</option>{% for id, path in folder_destinations[folder.id] %}<option value="{{ id }}">{{ path }}</option>{% endfor %}</select><button type="submit">Move</button></div></form>
+                <form action="{{ url_for('delete_folder', folder_id=folder.id) }}" method="post" onsubmit="return confirm('Delete this empty folder?')"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="current_folder" value="{{ current_id or '' }}"><button class="text-button delete" type="submit">Delete empty folder</button></form>
+              </div></details></li>
+            {% endfor %}
+            {% for file in files %}
+              <li class="item"><div class="item-info"><strong title="{{ file.name }}">{{ file.name }}</strong><small>{{ file.size|size }} · {{ file.created[:10] }}</small></div><div class="item-right">
+                {% if file.name|previewable %}<a href="{{ url_for('named_preview', requested_path=preview_paths[file.id]) if preview_paths[file.id] else url_for('preview_by_id', token=file.id) }}">Open</a>{% endif %}
+                <a href="{{ url_for('download', token=file.id) }}">Download</a>
+                <details class="actions file-menu"><summary aria-label="More options for {{ file.name }}" title="More options">⋯</summary><div class="action-panel">
+                {% if file.name|previewable %}<button class="text-button copy" type="button" data-url="{{ url_for('named_preview', requested_path=preview_paths[file.id], _external=True, v='3') if preview_paths[file.id] else url_for('preview_by_id', token=file.id, _external=True, v='3') }}">Copy media link</button>{% endif %}
+                <button class="text-button copy" type="button" data-url="{{ url_for('download', token=file.id, _external=True) }}">Copy download link</button>
+                <button class="text-button copy" type="button" data-url="{{ local_paths[file.id] }}">Copy internal file location</button>
+                <form action="{{ url_for('rename_file', token=file.id) }}" method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="current_folder" value="{{ current_id or '' }}"><label for="rename-file-{{ file.id }}">Rename</label><div><input id="rename-file-{{ file.id }}" name="name" value="{{ file.name }}" maxlength="200" required><button type="submit">Save</button></div></form>
+                <form action="{{ url_for('move_file', token=file.id) }}" method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="current_folder" value="{{ current_id or '' }}"><label for="move-file-{{ file.id }}">Move to</label><div><select id="move-file-{{ file.id }}" name="destination"><option value="">All files</option>{% for id, path in folder_choices %}<option value="{{ id }}" {% if id == current_id %}selected{% endif %}>{{ path }}</option>{% endfor %}</select><button type="submit">Move</button></div></form>
+                <form action="{{ url_for('delete', token=file.id) }}" method="post" onsubmit="return confirm('Delete this file and disable its link?')"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="current_folder" value="{{ current_id or '' }}"><button class="text-button delete" type="submit">Delete file</button></form>
+              </div></details></div></li>
+            {% endfor %}
+            </ul>
+          {% else %}<p class="empty">This folder is empty.</p>{% endif %}
+        </section>
+      {% endif %}
+    </main>
+    <footer>yeah</footer>
+  </div>
+  <script src="{{ url_for('static', filename='app.js', v='6') }}"></script>
+</body>
+</html>
